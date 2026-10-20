@@ -52,5 +52,42 @@ The web UI features a dark space theme with animated stars, glass panels, and ne
 
 For more details check the documentation above..
 
+## Production Deployment (Vercel)
+
+The web backend stores all room data in a shared key/value database
+(`room_store.py`).  This is **required** on serverless hosts such as Vercel:
+every serverless instance has its own private memory, so a plain in-memory
+dict loses rooms between requests ("Join failed: room not found").
+
+### One-time setup (~2 minutes)
+
+1. In your Vercel project open **Storage → Create Database → Upstash Redis**
+   (free Hobby plan is enough) and connect it to this project, **or** create a
+   free database at [upstash.com](https://upstash.com).
+2. Confirm these environment variables exist in
+   **Project → Settings → Environment Variables** (Vercel adds them
+   automatically when you create the database from the Storage tab; for a
+   standalone Upstash database copy them from the Upstash console):
+   - `KV_REST_API_URL` + `KV_REST_API_TOKEN` (Vercel KV), **or**
+   - `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN` (Upstash Redis)
+3. Redeploy the project.
+
+### Verify the deployment
+
+Open `https://<your-project>.vercel.app/api/health`.  It must report
+`"storage": "kv"`.  If it says `"storage": "memory"`, the environment
+variables are missing — rooms will not persist between requests.
+
+If the KV service is ever unreachable or the free-tier quota is exhausted,
+the backend automatically degrades to per-instance storage and logs a
+warning instead of failing user requests.
+
+### Local development
+
+```bash
+python app.py
+```
+
+No database is needed locally — the app falls back to in-memory storage.
 
 

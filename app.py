@@ -1,8 +1,20 @@
-from flask import Flask, render_template, request, jsonify
-from passlib.hash import pbkdf2_sha256
-import uuid
-import json
+"""
+SpaceChat web backend (Flask).
+
+Room data is stored through room_store.store, which uses a shared KV backend
+(Upstash Redis / Vercel KV) when credentials are configured and an in-process
+dict otherwise.  This is what makes the app work reliably on serverless
+hosts such as Vercel, where every instance has its own memory.
+"""
+
+import os
 import time
+import uuid
+
+from flask import Flask, jsonify, render_template, request
+from passlib.hash import pbkdf2_sha256
+
+from room_store import store
 
 # Import quantum modules (with error handling for Vercel)
 try:
@@ -26,15 +38,23 @@ except ImportError as e:
         pass
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'replace-with-a-secure-secret'
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'replace-with-a-secure-secret')
 
-# In-memory room store (prototype). Replace with DB for production.
-# Structure: rooms[room_id] = {name, algorithm, pass_hash, participants: {username: True}, messages: []}
-rooms = {}
+MAX_PARTICIPANTS = 35
+
 
 @app.route('/')
 def index():
     return render_template('index_socketio.html')
+
+
+@app.route('/api/health')
+def health():
+    """Deployment self-check: confirms which storage backend is active."""
+    info = store.info()
+    return jsonify({'success': True, 'quantum_available': QUANTUM_AVAILABLE,
+                    'storage': info['backend'], 'storage_detail': info['detail']})
+
 
 # Create a room (HTTP POST)
 @app.route('/api/create-room', methods=['POST'])
@@ -50,18 +70,18 @@ def create_room():
         return jsonify({'error': 'room_name and passphrase required'}), 400
 
     room_id = str(uuid.uuid4())
-    pass_hash = pbkdf2_sha256.hash(passphrase)
-    rooms[room_id] = {
+    meta = {
         'name': room_name,
         'description': room_description,
         'algorithm': algorithm,
-        'pass_hash': pass_hash,
+        'pass_hash': pbkdf2_sha256.hash(passphrase),
         'creator': creator,
-        'participants': {},  # username -> True
-        'messages': [],  # list of {'id':, 'username':, 'message':}
-        'next_message_id': 0
+        'created_at': time.time(),
     }
+    store.create_room(room_id, meta)
+    print(f"Room created: {room_id} ({room_name}, {algorithm})")
     return jsonify({'room_id': room_id, 'message': 'room created', 'algorithm': algorithm})
+
 
 # Join-check (HTTP POST) - verifies passphrase, returns success
 @app.route('/api/join-room', methods=['POST'])
@@ -80,18 +100,17 @@ def join_room_http():
     if not username or len(username.strip()) == 0:
         username = f'user_{int(time.time())}'
 
-    room = rooms.get(room_id)
+    room = store.get_meta(room_id)
     if not room:
-        print(f"Room not found: {room_id}. Available rooms: {list(rooms.keys())}")
         return jsonify({'error': 'room not found'}), 404
 
-    # Check participant limit (35 max)
-    current_participants = len(room['participants'])
-    if current_participants >= 35:
+    # Check participant limit
+    participants = store.get_participants(room_id)
+    if len(participants) >= MAX_PARTICIPANTS:
         return jsonify({'error': 'room is full (max 35 participants)'}), 403
 
     # Check if username already exists
-    if username in room['participants']:
+    if username in participants:
         return jsonify({'error': 'username already taken in this room'}), 409
 
     if not pbkdf2_sha256.verify(passphrase, room['pass_hash']):
@@ -99,17 +118,21 @@ def join_room_http():
         return jsonify({'error': 'invalid passphrase'}), 403
 
     # Add participant
-    room['participants'][username] = True
-    print(f"User {username} joined room {room_id}. Participants: {len(room['participants'])}/{35}")
+    store.add_participant(room_id, username)
+    participant_count = len(participants) + 1
+    store.set_summary(room_id, room, {'participant_count': participant_count})
+    print(f"User {username} joined room {room_id}. "
+          f"Participants: {participant_count}/{MAX_PARTICIPANTS}")
 
     return jsonify({
         'room_id': room_id,
         'message': 'joined successfully',
         'algorithm': room['algorithm'],
         'name': room['name'],
-        'participant_count': len(room['participants']),
-        'max_participants': 35
+        'participant_count': participant_count,
+        'max_participants': MAX_PARTICIPANTS
     })
+
 
 # Polling endpoints for real-time simulation
 
@@ -120,76 +143,90 @@ def send_message():
     username = data.get('username')
     message = data.get('message')
 
-    print(f"Send message request: room_id={room_id}, username={username}, message_length={len(message) if message else 0}")
-
     # Validate input
     if not room_id or not username or not message:
-        print(f"Missing required fields: room_id={room_id}, username={username}, message={message}")
         return jsonify({'error': 'room_id, username, and message required'}), 400
 
-    room = rooms.get(room_id)
+    room = store.get_meta(room_id)
     if not room:
-        print(f"Room not found: {room_id}")
         return jsonify({'error': 'room not found'}), 404
 
     # Check if user is a participant
-    if username not in room['participants']:
-        print(f"User {username} not in room {room_id} participants: {list(room['participants'].keys())}")
+    if username not in store.get_participants(room_id):
         return jsonify({'error': 'user not in room'}), 403
 
     # Add message
-    msg_id = room['next_message_id']
-    room['next_message_id'] += 1
-    room['messages'].append({'id': msg_id, 'username': username, 'message': message})
+    msg_id = store.append_message(room_id, username, message)
+    store.set_summary(room_id, room, {'message_count': msg_id + 1})
 
-    print(f"Message sent successfully: {username} in room {room_id}, total messages: {len(room['messages'])}")
-    return jsonify({'success': True})
+    print(f"Message stored: {username} in room {room_id} (id={msg_id})")
+    return jsonify({'success': True, 'message_id': msg_id})
+
 
 @app.route('/api/get-messages', methods=['GET'])
 def get_messages():
     room_id = request.args.get('room_id')
-    room = rooms.get(room_id)
-    if not room:
+    if not store.get_meta(room_id):
         return jsonify({'error': 'room not found'}), 404
-    return jsonify({'messages': room['messages'], 'next_id': room['next_message_id']})
+
+    try:
+        since = int(request.args.get('since', -1))
+    except ValueError:
+        since = -1
+
+    messages = store.get_messages(room_id)
+    if since >= -1:
+        messages = [m for m in messages if m.get('id', 0) > since]
+
+    next_id = (messages[-1]['id'] + 1) if messages else max(since + 1, 0)
+    return jsonify({'messages': messages, 'next_id': next_id})
+
 
 @app.route('/api/get-participants', methods=['GET'])
 def get_participants():
     room_id = request.args.get('room_id')
-    room = rooms.get(room_id)
-    if not room:
+    if not store.get_meta(room_id):
         return jsonify({'error': 'room not found'}), 404
-    return jsonify({'participants': list(room['participants'])})
+    return jsonify({'participants': list(store.get_participants(room_id))})
+
 
 @app.route('/api/leave-room', methods=['POST'])
 def leave_room():
     data = request.json or {}
     room_id = data.get('room_id')
     username = data.get('username')
-    room = rooms.get(room_id)
-    if room and username in room['participants']:
-        del room['participants'][username]
+    if room_id and username:
+        store.remove_participant(room_id, username)
+        room = store.get_meta(room_id)
+        if room:
+            count = len(store.get_participants(room_id))
+            store.set_summary(room_id, room, {'participant_count': count})
+        print(f"User {username} left room {room_id}")
     return jsonify({'success': True})
+
 
 @app.route('/api/list-rooms', methods=['GET'])
 def list_rooms():
     """List rooms created by the current user only"""
     creator = request.args.get('creator', 'web')  # Default to 'web' for web clients
     room_list = []
-    for room_id, room_data in rooms.items():
-        if room_data['creator'] == creator:
+    for summary in store.list_summaries():
+        if summary.get('creator') == creator:
             room_list.append({
-                'id': room_id,
-                'name': room_data['name'],
-                'algorithm': room_data['algorithm'],
-                'creator': room_data['creator'],
-                'participant_count': len(room_data['participants']),
-                'message_count': len(room_data['messages'])
+                'id': summary.get('id'),
+                'name': summary.get('name', ''),
+                'algorithm': summary.get('algorithm', ''),
+                'creator': summary.get('creator', ''),
+                'participant_count': summary.get('participant_count', 0),
+                'message_count': summary.get('message_count', 0)
             })
     return jsonify({'rooms': room_list})
+
 
 # Export Flask app for Vercel
 application = app
 
 if __name__ == '__main__':
+    print(f"Storage backend: {store.info()['detail']}")
     app.run(host='127.0.0.1', port=5001, debug=True)
+

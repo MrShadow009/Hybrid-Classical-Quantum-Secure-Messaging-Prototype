@@ -47,10 +47,13 @@ document.getElementById('createSubmit').onclick = async ()=>{
   });
   const data = await res.json();
   if(data.room_id) {
-    alert('Room created: ' + data.room_id);
     createModal.style.display = 'none';
-    // Optionally auto-fill Join modal
+    // Open the Join modal pre-filled so the creator can enter the room right away
     document.getElementById('joinRoomId').value = data.room_id;
+    document.getElementById('joinPass').value = passphrase;
+    joinModal.style.display = 'flex';
+    appendMessage(`Room "${room_name}" created — Room ID: ${data.room_id}`, 'meta');
+    document.getElementById('joinName').focus();
   } else {
     alert('Error: ' + JSON.stringify(data));
   }
@@ -103,6 +106,7 @@ document.getElementById('joinSubmit').onclick = async ()=>{
     myUsername = username;
     currentRoomId = room_id;
     lastMessageId = -1;
+    joinedRooms[room_id] = { name: data.name || room_id, algorithm: data.algorithm || '', username: username };
     roomTitle.textContent = `Room: ${data.name || room_id} (${data.algorithm})`;
     currentRoomDisplay.textContent = `Current Room: ${data.name || room_id}`;
     leaveRoomBtn.style.display = 'block';
@@ -178,6 +182,16 @@ document.getElementById('sendBtn').onclick = async ()=>{
 };
 
 function leaveRoom() {
+  if (currentRoomId && myUsername) {
+    // Tell the server we are leaving so the participant list stays accurate
+    fetch('/api/leave-room', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({room_id: currentRoomId, username: myUsername}),
+      keepalive: true
+    }).catch(() => {});
+    delete joinedRooms[currentRoomId];
+  }
   currentRoomId = null;
   myUsername = null;
   lastMessageId = -1;
@@ -197,6 +211,9 @@ leaveRoomBtn.onclick = leaveRoom;
 
 // Polling functions
 function startPolling() {
+  // Clear any previous intervals so switching rooms never stacks timers
+  if (messageInterval) clearInterval(messageInterval);
+  if (participantInterval) clearInterval(participantInterval);
   pollMessages();
   pollParticipants();
   messageInterval = setInterval(pollMessages, 2000);
@@ -206,7 +223,16 @@ function startPolling() {
 // Initialize room polling on page load
 document.addEventListener('DOMContentLoaded', function() {
   pollRooms(); // Initial load
-  roomInterval = setInterval(pollRooms, 3000); // Poll every 3 seconds
+  roomInterval = setInterval(pollRooms, 5000); // Refresh the room list
+
+  // When the tab is closed/refreshed, leave the room server-side so the
+  // participant list does not keep stale users around
+  window.addEventListener('pagehide', function() {
+    if (currentRoomId && myUsername) {
+      const payload = JSON.stringify({room_id: currentRoomId, username: myUsername});
+      navigator.sendBeacon('/api/leave-room', new Blob([payload], {type: 'application/json'}));
+    }
+  });
 
   // Add search functionality
   searchRoomsInput.addEventListener('input', function() {
@@ -233,7 +259,7 @@ document.addEventListener('DOMContentLoaded', function() {
 async function pollMessages() {
   if (!currentRoomId) return;
   try {
-    const res = await fetch(`/api/get-messages?room_id=${currentRoomId}`);
+    const res = await fetch(`/api/get-messages?room_id=${currentRoomId}&since=${lastMessageId}`);
     const data = await res.json();
     if (data.messages) {
       data.messages.forEach(msg => {
@@ -297,7 +323,7 @@ function displayRooms(rooms) {
       </div>
     `;
 
-    roomEl.onclick = () => switchToRoom(room.id, room.name, room.algorithm);
+    roomEl.onclick = () => handleRoomClick(room);
     roomsListEl.appendChild(roomEl);
   });
 }
@@ -327,20 +353,35 @@ async function updateRoomInfo(roomId) {
   }
 }
 
+function handleRoomClick(room) {
+  // Already joined this room before -> switch instantly
+  if (joinedRooms[room.id] && currentRoomId !== room.id) {
+    switchToRoom(room.id, room.name, room.algorithm);
+    return;
+  }
+  if (currentRoomId === room.id) return; // already viewing it
+
+  // Not joined yet -> the passphrase is required, so open the Join modal
+  openJoinModal(room.id, room.name);
+}
+
+function openJoinModal(roomId, roomName) {
+  document.getElementById('joinRoomId').value = roomId;
+  document.getElementById('joinPass').value = '';
+  if (myUsername) document.getElementById('joinName').value = myUsername;
+  joinModal.style.display = 'flex';
+  appendMessage(`Enter the passphrase to join "${roomName || roomId}"`, 'meta');
+  document.getElementById('joinPass').focus();
+}
+
 function switchToRoom(roomId, roomName, algorithm) {
   if (roomId === currentRoomId) return; // Already in this room
+  const info = joinedRooms[roomId];
+  if (!info) { openJoinModal(roomId, roomName); return; }
 
-  // If user is already in a room, leave it first
-  if (currentRoomId && myUsername) {
-    fetch('/api/leave-room', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({room_id: currentRoomId, username: myUsername})
-    });
-  }
-
-  // Switch to new room
+  // Switch to the room; membership of previously joined rooms is kept
   currentRoomId = roomId;
+  myUsername = info.username;
   lastMessageId = -1;
   roomTitle.textContent = `Room: ${roomName} (${algorithm})`;
   currentRoomDisplay.textContent = `Current Room: ${roomName}`;
@@ -355,6 +396,6 @@ function switchToRoom(roomId, roomName, algorithm) {
   // Update room info
   updateRoomInfo(roomId);
 
-  // Start polling for new room
+  // Start polling for the new room (replaces previous intervals)
   startPolling();
 }
