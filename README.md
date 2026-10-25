@@ -22,6 +22,12 @@
 
 <br/>
 
+### 🚀 [**Live Demo → bits-one-rho.vercel.app**](https://bits-one-rho.vercel.app/)
+
+[![Open Live Demo](https://img.shields.io/badge/OPEN-LIVE%20DEMO-000000?style=for-the-badge&logo=vercel&logoColor=white)](https://bits-one-rho.vercel.app/)
+
+<br/>
+
 > *"Even if one algorithm faces a vulnerability, the data remains protected behind the second layer."*
 
 <br/>
@@ -31,6 +37,7 @@
 [Three Layers](#-5-the-three-layers-of-protection) ·
 [Message Journey](#-11-the-complete-message-journey) ·
 [Threat Model](#-27-threat-model) ·
+[Live Demo](https://bits-one-rho.vercel.app/) ·
 [Run It](#-37-running-locally) ·
 [Deploy](#-38-deploying-to-vercel)
 
@@ -1331,6 +1338,12 @@ python desktop/client.py
 ---
 
 ## 🚢 38. Deploying to Vercel
+
+> 🌐 **Live deployment:** [https://bits-one-rho.vercel.app/](https://bits-one-rho.vercel.app/)
+
+The project is already published at the link above, served over **HTTPS** so the transport carrier is active from the first request. Open it in two browser windows, join the same room, and watch messages travel through the three layers and back.
+
+### Steps to deploy your own copy
 
 1. Push the project to a Git repository.
 2. Import the repository in [Vercel](https://vercel.com).
