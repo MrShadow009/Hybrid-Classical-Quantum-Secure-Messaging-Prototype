@@ -5,7 +5,7 @@
 # 🛡️ Hybrid Classical-Quantum Secure Messaging Prototype
 
 **A passphrase-protected chat that seals every message in three layers:**
-**classical ciphertext → quantum-simulated bits → HTTPS / TLS transport**
+**plain text → ciphertext 1 → ciphertext 2 → simulated qubits, all carried over HTTPS**
 
 <br/>
 
@@ -22,7 +22,7 @@
 
 <br/>
 
-> *"Even if one layer faces a vulnerability, the data remains protected behind the second layer."*
+> *"Even if one algorithm faces a vulnerability, the data remains protected behind the second layer."*
 
 <br/>
 
@@ -47,10 +47,10 @@
 | 3 | [Key Features](#-3-key-features) | 23 | [The Desktop Path](#-23-the-separate-desktop-path) |
 | 4 | [System Architecture](#-4-system-architecture) | 24 | [Workflow Across the Internet](#-24-workflow-across-the-internet) |
 | 5 | [The Three Layers of Protection](#-5-the-three-layers-of-protection) | 25 | [Single-Layer Systems in Real Life](#-25-single-layer-systems-in-real-life) |
-| 6 | [Layer 1: Plain Text to Ciphertext](#-6-layer-1-plain-text-to-ciphertext) | 26 | [Why Vercel?](#-26-why-vercel-to-publish) |
-| 7 | [Layer 2: Quantum-Simulated Encoding](#-7-layer-2-ciphertext-to-zeros-and-ones-quantum-simulated) | 27 | [Threat Model](#-27-threat-model) |
-| 8 | [Layer 3: HTTPS and TLS](#-8-layer-3-https-and-tls-in-transit) | 28 | [Man-in-the-Middle Attacks](#-28-man-in-the-middle-attacks) |
-| 9 | [Why Double Encryption Matters](#-9-why-double-encryption-matters) | 29 | [Keyloggers and Endpoints](#-29-keyloggers-and-endpoint-threats) |
+| 6 | [Layer 1: Plain Text to Ciphertext 1](#-6-layer-1-plain-text-to-ciphertext-1) | 26 | [Why Vercel?](#-26-why-vercel-to-publish) |
+| 7 | [Layer 2: Ciphertext 1 to Ciphertext 2](#-7-layer-2-ciphertext-1-to-ciphertext-2) | 27 | [Threat Model](#-27-threat-model) |
+| 8 | [Layer 3: Ciphertext 2 to Qubits](#-8-layer-3-ciphertext-2-to-qubits-simulated) | 28 | [Man-in-the-Middle Attacks](#-28-man-in-the-middle-attacks) |
+| 9 | [HTTPS Carrier and Why Layering Matters](#-9-https-and-tls-the-carrier-and-why-layering-matters) | 29 | [Keyloggers and Endpoints](#-29-keyloggers-and-endpoint-threats) |
 | 10 | [Understanding Qubits](#-10-understanding-qubits-and-simulating-them) | 30 | [Custom Input Fields](#-30-custom-input-fields-and-virtual-keyboards) |
 | 11 | [The Complete Message Journey](#-11-the-complete-message-journey) | 31 | [Clearing Memory](#-31-clearing-sensitive-data-from-memory) |
 | 12 | [Rooms, Passphrases, Participants](#-12-rooms-passphrases-and-participants) | 32 | [Cost of a Data Breach](#-32-statistics-the-cost-of-a-data-breach) |
@@ -78,7 +78,7 @@ The idea at the centre of the project is simple to say and interesting to build:
 
 > Do not trust a single lock. Put the message behind **three** of them.
 
-Every message that leaves a sender passes through three layers of protection:
+Every message that leaves a sender passes through three layers of protection, then travels over HTTPS:
 
 | Layer | Name | What happens | Where it lives |
 |:-----:|------|--------------|----------------|
@@ -119,8 +119,8 @@ This project explores a different posture: **defence in depth**.
 
 ### The answer used here
 
-- **Two application-level transformations** are applied before the message ever reaches the network.
-- **TLS** is then applied on top, in transit.
+- **Three application-level transformations** (two ciphers, then a qubit simulation) are applied before the message ever reaches the network.
+- **HTTPS / TLS** then carries the result, in transit.
 - The server checks that a **room exists** and that the **required fields are present** before accepting anything.
 - Messages carry an **ID**, so order is stable and no message is silently reordered.
 
@@ -137,8 +137,9 @@ The goal is a clear, teachable demonstration of layered security that a student,
 ### 🔐 Security
 
 - Three-layer protection per message
-- Classical ciphertext as the first layer
-- Quantum-simulated zeros-and-ones encoding as the second layer
+- Plain text → Ciphertext 1 as the first layer
+- Ciphertext 1 → Ciphertext 2 (a different algorithm) as the second layer
+- Ciphertext 2 → simulated qubits (superposition + entanglement) as the third layer
 - HTTPS with native Transport Layer Security as the third layer
 - Passphrase-protected rooms
 - Server-side presence and field checks
@@ -227,156 +228,175 @@ The Flask web flow and the desktop TCP flow are **different programs**. They do 
 
 ## 🧱 5. The Three Layers of Protection
 
+The three layers are three **successive transformations** of the message:
+
+| Layer | Transformation | Nature |
+|:-----:|----------------|--------|
+| **1** | **Plain text → Ciphertext 1** | First encryption |
+| **2** | **Ciphertext 1 → Ciphertext 2** | Second encryption, using a *different* algorithm |
+| **3** | **Ciphertext 2 → Qubits** | Simulated environment with **superposition** and **entanglement** |
+
 ```mermaid
 flowchart TB
     P["📝 Plain Text<br/>'Hello team'"] --> L1
-    L1["🔒 LAYER 1<br/>Plain → Ciphertext"] --> L2
-    L2["⚛️ LAYER 2<br/>Ciphertext → 0 &amp; 1<br/>(Quantum Simulated)"] --> L3
-    L3["🛰️ LAYER 3<br/>HTTPS / TLS Transport"] --> N["🌍 Internet"]
+    L1["🔒 LAYER 1<br/>Plain Text → Ciphertext 1"] --> L2
+    L2["🔐 LAYER 2<br/>Ciphertext 1 → Ciphertext 2"] --> L3
+    L3["⚛️ LAYER 3<br/>Ciphertext 2 → Qubits<br/>(simulated superposition + entanglement)"] --> T
+    T["🛰️ Sent over an HTTPS server<br/>(native TLS carries all of it)"] --> N["🌍 Internet"]
 ```
 
-Think of it as three nested envelopes:
+Think of it as three nested envelopes, each one sealing the one before it:
 
-1. **Inner envelope:** the text is turned into ciphertext.
-2. **Middle envelope:** the ciphertext is turned into a stream of zeros and ones represented as simulated qubits.
-3. **Outer envelope:** the whole thing rides inside an HTTPS connection protected by TLS.
+1. **Envelope 1:** the plain text is sealed into Ciphertext 1.
+2. **Envelope 2:** Ciphertext 1 is sealed again into Ciphertext 2.
+3. **Envelope 3:** Ciphertext 2 is converted into qubit form, inside a simulated environment built to behave with superposition and entanglement.
 
-An observer has to defeat all three to read the original words.
+The finished package is then **transmitted through an HTTPS server**. HTTPS is the *road* the three layers travel on. It uses **native Transport Layer Security** to keep the data's **integrity** and **confidentiality** during transit. It is the carrier, not one of the three message layers.
 
-| Property | Layer 1 | Layer 2 | Layer 3 |
-|----------|:-------:|:-------:|:-------:|
-| Confidentiality of content | ✅ | ✅ | ✅ |
-| Integrity in transit | – | – | ✅ |
-| Resists passive network sniffing | ✅ | ✅ | ✅ |
-| Protects against a flaw in the layer below it | ✅ | ✅ | – |
-| Applied by the application | ✅ | ✅ | – |
-| Applied by the transport | – | – | ✅ |
+| Property | Layer 1 | Layer 2 | Layer 3 | HTTPS / TLS (carrier) |
+|----------|:-------:|:-------:|:-------:|:---------------------:|
+| Hides the content | ✅ | ✅ | ✅ | ✅ |
+| Different algorithm from the one before | – | ✅ | ✅ | – |
+| Protects the data if the layer below it fails | – | ✅ | ✅ | – |
+| Integrity in transit | – | – | – | ✅ |
+| Applied by the application | ✅ | ✅ | ✅ | – |
 
 ---
 
-## 🔒 6. Layer 1: Plain Text to Ciphertext
+## 🔒 6. Layer 1: Plain Text to Ciphertext 1
 
 **This is the first layer of encryption.**
 
 ```
- plain text   ─────────────►   ciphertext
+ plain text   ─────────────►   ciphertext 1
  "Hello"             encrypt        "x9Q…=="
 ```
 
-After the user types a message, the first thing the system does is encrypt it. The plain text never needs to travel anywhere in readable form. Once the message is ciphertext, the next layer can work on it.
+After the user types a message, the first thing the system does is encrypt it. Plain text never needs to travel anywhere in readable form. Once the message is Ciphertext 1, the next layer works on it.
 
 ### Why a classical layer first?
 
 - Classical cryptography is well understood.
 - It gives a solid, standard base that the later layers build on.
-- It produces output that is already unreadable without the key.
+- Its output is already unreadable without the key.
 
-### The asymmetric idea behind the design
-
-The project's approach relies on using **two different asymmetric algorithms in sequence**. The reasoning is straightforward:
-
-> By using two different asymmetric algorithms in sequence, you can ensure that even if one algorithm faces a vulnerability, the data remains protected behind the second layer.
-
-Using two different algorithms matters. If both layers used the same algorithm, one discovered weakness would break both at once. Two different mathematical foundations mean a single breakthrough does not unlock the whole message.
-
-### What the first layer must guarantee
+### What Layer 1 must guarantee
 
 | Requirement | Meaning |
 |-------------|---------|
-| Output is unreadable | Ciphertext does not reveal the plain text |
-| Output is reversible | The intended receiver can decrypt it |
-| Independent of Layer 2 | A failure in Layer 2 does not undo Layer 1 |
-| Independent of Layer 3 | A TLS problem does not expose plain text |
+| Output is unreadable | Ciphertext 1 does not reveal the plain text |
+| Output is reversible | The intended receiver can undo it |
+| Independent of Layer 2 | A flaw in Layer 2 does not undo Layer 1 |
+| Independent of Layer 3 | A flaw in the qubit simulation does not expose plain text |
 
 ---
 
-## ⚛️ 7. Layer 2: Ciphertext to Zeros and Ones (Quantum Simulated)
+## 🔐 7. Layer 2: Ciphertext 1 to Ciphertext 2
 
-**This is the second layer of encryption.** Once the server has checked the request, the pipeline performs:
+**This is the second layer of encryption.** Ciphertext 1 is encrypted again:
 
 ```
- ciphertext   ─────────────►   0 & 1   (quantum simulated)
+ ciphertext 1   ─────────────►   ciphertext 2
+   "x9Q…=="            encrypt         "Zm4…=="
 ```
 
-The final ciphertext is converted into **qubit representations**. In a real quantum system, a qubit can use **superposition** and **entanglement**, so that data can represent zeros and ones simultaneously. This project **simulates** that idea.
+### Two different asymmetric algorithms, in sequence
 
-### What the conversion does
+The project's approach relies on using **two different asymmetric algorithms in sequence**:
 
-1. Takes the ciphertext produced by Layer 1.
-2. Expands it into a sequence of zeros and ones.
-3. Represents each position as a simulated qubit state.
-4. Produces a form that is both unreadable and structurally different from ordinary ciphertext.
+> By using two different asymmetric algorithms in sequence, you can ensure that even if one algorithm faces a vulnerability, the data remains protected behind the second layer.
 
-### Where it happens
+| | Layer 1 | Layer 2 |
+|--|---------|---------|
+| Algorithm | Asymmetric algorithm **A** | A **different** asymmetric algorithm **B** |
+| Input | Plain text | Ciphertext 1 |
+| Output | Ciphertext 1 | Ciphertext 2 |
 
-The note describing the flow says that after Flask **checks and stores** the request, and after it confirms that **required fields exist** and that the **room exists**, **it does the second layer encryption**. That means Layer 2 is applied on the server path of the web flow, after validation succeeds.
+If both layers used the same algorithm, one discovered weakness would break both at once. Two different mathematical foundations mean a single breakthrough does not unlock the message.
+
+### Where it happens in the web flow
+
+The flow notes say that after Flask **checks and stores** the request, and confirms **required fields exist** and the **room exists**, **it does the second layer of encryption**. Layer 2 is applied on the server path, after validation succeeds.
+
+---
+
+## ⚛️ 8. Layer 3: Ciphertext 2 to Qubits (Simulated)
+
+**This is the third layer.** The final ciphertext, Ciphertext 2, is converted into **qubits**:
+
+```
+ ciphertext 2   ─────────────►   qubits  (simulated)
+```
+
+### A simulated environment
+
+A real qubit uses **superposition** and **entanglement**, so data can represent **zeros and ones simultaneously**. A normal computer cannot hold a real qubit. So this layer works by **creating an environment that simulates** those behaviours using classical bits:
+
+| Quantum idea | What the simulated environment does |
+|--------------|-------------------------------------|
+| **Superposition** | Each simulated qubit carries a blend of 0 and 1 rather than one fixed value, until it is "measured" (read back) |
+| **Entanglement** | Simulated qubits are linked, so the state of one depends on the state of others in the register |
+| **Zeros and ones simultaneously** | The data is held as a register of linked, blended states instead of a plain bit string |
+
+```mermaid
+flowchart LR
+    C2["Ciphertext 2"] --> B["Bits 0 / 1"]
+    B --> S["Simulated environment"]
+    S --> SP["Superposition<br/>(blended 0 and 1)"]
+    S --> EN["Entanglement<br/>(linked qubits)"]
+    SP --> Q["Qubit representation"]
+    EN --> Q
+```
 
 ### Illustration
 
 ```
-ciphertext bytes   →   bit string        →   simulated qubit register
-  0x9F 0x2A              1001 1111            |1⟩|0⟩|0⟩|1⟩|1⟩|1⟩|1⟩|1⟩
-                         0010 1010            |0⟩|0⟩|1⟩|0⟩|1⟩|0⟩|1⟩|0⟩
+ciphertext 2 bytes  →  bit string      →  simulated qubit register
+  0x9F 0x2A             1001 1111          |ψ₀⟩ ⟷ |ψ₁⟩ ⟷ |ψ₂⟩ ⟷ |ψ₃⟩ …
+                        0010 1010          (each |ψ⟩ = α|0⟩ + β|1⟩, linked to its neighbours)
 ```
 
 > 📌 **Note:** It is very practical to simulate quantum qubits using classical bits for demonstration purposes.
 
-That sentence is the honest centre of this layer. A laptop cannot hold real superposition. It can, however, **model** it with classical bits, and that is perfectly good for showing how such a pipeline would be shaped. See [Honest Limitations](#-34-honest-limitations) for what this does and does not buy you.
+See [Honest Limitations](#-34-honest-limitations) for what this does and does not buy you.
 
 ---
 
-## 🛰️ 8. Layer 3: HTTPS and TLS in Transit
+## 🛰️ 9. HTTPS and TLS: The Carrier, and Why Layering Matters
 
-**This is the transport layer of protection.**
+### Transmission over HTTPS
 
-The result of Layers 1 and 2 is sent through an **HTTPS server**. HTTPS uses **native Transport Layer Security (TLS)**, which provides:
+The result of the three layers is **transmitted via an HTTPS server**, which uses **native Transport Layer Security**. TLS keeps:
 
-- **Confidentiality during transit** – eavesdroppers on the path see only encrypted traffic.
-- **Integrity during transit** – tampering is detected.
-- **Server authentication** – the browser checks it is talking to the real server.
+- **Integrity** of the data during transit, so tampering is detected.
+- **Confidentiality** of the data during transit, so eavesdroppers see only encrypted traffic.
+- **Server authentication**, so the browser knows it is talking to the real server.
 
 ```mermaid
 sequenceDiagram
     participant S as Sender Browser
     participant T as TLS Tunnel
     participant F as Flask Server
-    S->>T: Encrypted + qubit-encoded payload
-    Note over S,F: Everything inside the tunnel is already protected twice
+    S->>T: Qubit-form payload (already sealed 3 times)
+    Note over S,F: HTTPS carries the three layers safely
     T->>F: Same payload, delivered intact
 ```
 
-### Why TLS even though the data is already encrypted?
-
-Because each layer defends against different things:
-
-- Layers 1 and 2 protect the **content**.
-- Layer 3 protects the **connection**, including headers, request shape, and tamper detection.
-
-A message that is double-protected and then carried over TLS gives an attacker three separate walls.
-
----
-
-## 🛡️ 9. Why Double Encryption Matters
+### Why the layering matters
 
 > The double encryption process added a significant layer of security to the project's approach.
 
-### The core argument
+| Situation | Single protection | Layered (this project) |
+|-----------|-------------------|------------------------|
+| One algorithm is found vulnerable | Everything exposed | The second cipher still protects the data |
+| Transport is misconfigured | Plain text may leak | Content is still Ciphertext 2 in qubit form |
+| A server logs a payload | Readable if only TLS was used | Unreadable without undoing every layer |
+| A middlebox inspects traffic | Sees content if TLS is stripped | Sees only qubit-encoded ciphertext |
 
-| Situation | Single layer | Layered (this project) |
-|-----------|--------------|------------------------|
-| One algorithm is found vulnerable | Everything exposed | Second layer still protects |
-| Transport is misconfigured | Plain text may leak | Content is still ciphertext in qubit form |
-| Server logs a payload | Readable if only TLS was used | Unreadable without both transformations |
-| A middlebox inspects traffic | Sees content if TLS is stripped | Sees only encoded ciphertext |
+### What layering is **not**
 
-### In plain words
-
-If a lock breaks, a second lock still holds. If both application locks were somehow bypassed, the door itself is still inside a locked building, which is TLS.
-
-### What double encryption is **not**
-
-- It is not a promise that nothing can ever go wrong.
-- It does not defend against malware on the user's own device. That is a different threat covered in [Keyloggers and Endpoint Threats](#-29-keyloggers-and-endpoint-threats).
+- It is not a promise that nothing can go wrong.
+- It does not defend against malware on the user's own device. See [Keyloggers and Endpoint Threats](#-29-keyloggers-and-endpoint-threats).
 - It does not make a weak passphrase strong.
 
 ---
@@ -433,10 +453,11 @@ sequenceDiagram
 
     U->>SH: Types message, presses send
     SH->>SH: Read input, check user joined the room
-    U->>U: Layer 1: plain → ciphertext
+    U->>U: Layer 1: plain → ciphertext 1
     U->>FL: HTTP request to Flask endpoint
     FL->>FL: Check required fields + room exists
-    FL->>FL: Layer 2: ciphertext → 0 & 1 (quantum simulated)
+    FL->>FL: Layer 2: ciphertext 1 → ciphertext 2
+    FL->>FL: Layer 3: ciphertext 2 → qubits (simulated)
     FL->>RS: Store message, assign message ID
     RS->>KV: Write to shared KV or process memory
     FL-->>U: Accepted
@@ -455,10 +476,10 @@ sequenceDiagram
 |:----:|-------|--------|
 | 1 | Socket handler | Reads the input and checks that the user **joined the room** |
 | 2 | Browser | Sends an **HTTP request to the Flask endpoint** |
-| 3 | Layer 1 | **Plain → Ciphertext** is done |
+| 3 | Layer 1 | **Plain → Ciphertext 1** is done |
 | 4 | Flask | **Checks and stores** the request |
 | 5 | Flask | Confirms **required fields exist** and the **room exists** |
-| 6 | Layer 2 | **Ciphertext → 0 & 1** (quantum simulated) |
+| 6 | Layers 2 + 3 | **Ciphertext 1 → Ciphertext 2 → qubits** (quantum simulated) |
 | 7 | Server | If it **accepts** the message, the browser **clears the input** |
 | 8 | Browser | Does **not** immediately add the message to the chat display |
 | 9 | Store | The **message ID** gives stored messages an order |
@@ -559,7 +580,7 @@ After the first layer of encryption is done, the browser **sends an HTTP request
 | 2 | Check and store | Examine the request and prepare to store it |
 | 3 | Field check | Verify that **required fields exist** |
 | 4 | Room check | Verify that the **room exists** |
-| 5 | Second layer | Perform **Ciphertext → 0 & 1** (quantum simulated) |
+| 5 | Second layer | Perform **Ciphertext 1 → Ciphertext 2**, then **Ciphertext 2 → qubits** (simulated) |
 | 6 | Persist | Hand the result to `room_store.py` |
 | 7 | Respond | Tell the browser whether the message was accepted |
 
@@ -608,7 +629,7 @@ Because the browser is under the user's control, and therefore under an attacker
 
 ### Order matters
 
-Validation happens **before** the second layer is applied. There is no value in encoding and storing something that is going to be refused.
+Validation happens **before** the second and third layers are applied. There is no value in encoding and storing something that is going to be refused.
 
 ---
 
@@ -908,7 +929,7 @@ flowchart LR
         X["Message"] --> Y["One protection"] --> Z["Network"]
     end
     subgraph THREE["This project"]
-        M["Message"] --> A1["Layer 1 cipher"] --> A2["Layer 2 qubit encoding"] --> A3["Layer 3 TLS"] --> N["Network"]
+        M["Message"] --> A1["Layer 1 cipher"] --> A2["Layer 2 cipher"] --> A3["Layer 3 qubits"] --> A4["HTTPS / TLS"] --> N["Network"]
     end
 ```
 
@@ -928,7 +949,7 @@ The point is not to say those platforms are weak. It is to show that **adding in
 | Scalable | **Serverless functions are highly scalable** |
 | Cost-effective | **Cost-effective for unpredictable traffic**, since you pay for use |
 | No server chores | **We don't manage servers** |
-| HTTPS by default | Published sites are served over HTTPS, supporting Layer 3 |
+| HTTPS by default | Published sites are served over HTTPS, supporting the HTTPS carrier |
 | Easy deployment | Publish from a repository with minimal setup |
 
 ### The link back to polling
@@ -988,15 +1009,16 @@ flowchart LR
 
 ### How the project answers it
 
-1. **All transmission is done using secured HTTPS** (Layer 3).
-2. Even if the TLS protection were somehow defeated, what the attacker captures is **ciphertext in qubit-simulated form** (Layers 1 and 2).
+1. **All transmission is done using secured HTTPS** (the carrier).
+2. Even if the TLS protection were somehow defeated, what the attacker captures is **Ciphertext 2 in qubit-simulated form**.
 3. The attacker must break **all three layers** to read a message.
 
 | Attacker success so far | What they see |
 |------------------------|---------------|
 | Watches the network | TLS-encrypted traffic |
 | Strips / breaks TLS | Qubit-encoded ciphertext |
-| Also reverses Layer 2 | Ciphertext |
+| Also undoes Layer 3 (qubits) | Ciphertext 2 |
+| Also breaks Layer 2 | Ciphertext 1 |
 | Also breaks Layer 1 | Plain text |
 
 ### Practical advice
@@ -1159,7 +1181,7 @@ Because security work is easier to justify when the price of failure is visible.
 
 | Threat | Layer 1 | Layer 2 | Layer 3 | Input hardening | Memory clearing |
 |--------|:------:|:------:|:------:|:---------------:|:---------------:|
-| Network eavesdropping | ✅ | ✅ | ✅ | – | – |
+| Network eavesdropping (with HTTPS) | ✅ | ✅ | ✅ | – | – |
 | Man-in-the-middle | ✅ | ✅ | ✅ | – | – |
 | Flaw in one algorithm | ✅ | ✅ | – | – | – |
 | Keylogger | – | – | – | ✅ | ✅ |
@@ -1170,7 +1192,7 @@ The last row is handled by **server-side membership and room checks**, not by cr
 
 ### One-line version
 
-**Content is protected twice at the application level, once more in transit, and the input path is hardened against keystroke capture.**
+**Content is sealed three times at the application level (two ciphers, then qubits), carried over HTTPS, and the input path is hardened against keystroke capture.**
 
 ---
 
@@ -1179,7 +1201,7 @@ The last row is handled by **server-side membership and room checks**, not by cr
 A good prototype is clear about its edges.
 
 1. **Qubits are simulated.** Classical bits stand in for qubits. This shows the architecture; it does not deliver the physical guarantees of real quantum communication.
-2. **Simulation is not a cryptographic proof.** Layer 2 adds a structural transformation. Its strength should not be assumed to equal that of a vetted cipher.
+2. **Simulation is not a cryptographic proof.** Layer 3 adds a structural transformation. Its strength should not be assumed to equal that of a vetted cipher.
 3. **Endpoint compromise defeats everything.** If a device is fully compromised, no network design can save it.
 4. **In-memory storage is temporary.** Local data can disappear on restart and is not shared across instances.
 5. **Polling is not instant.** Messages arrive on the next poll, not the moment they are sent.
@@ -1314,7 +1336,7 @@ python desktop/client.py
 2. Import the repository in [Vercel](https://vercel.com).
 3. Add a KV store (Upstash / Vercel KV) and connect it to the project.
 4. Set environment variables from the [configuration table](#-36-configuration-reference).
-5. Deploy. Vercel serves the site over **HTTPS**, supporting Layer 3.
+5. Deploy. Vercel serves the site over **HTTPS**, supporting the transport carrier.
 
 Example `vercel.json`:
 
@@ -1433,7 +1455,7 @@ No. They are separate implementations with their own encryption and simulation c
 
 ## 🧠 Key Takeaways
 
-1. **Three layers beat one:** ciphertext, qubit-simulated bits, and TLS.
+1. **Three layers beat one:** Ciphertext 1, Ciphertext 2, and simulated qubits, carried over HTTPS.
 2. **Two different algorithms in sequence** keep data safe even if one fails.
 3. **The server validates everything:** fields, room, membership.
 4. **Message IDs define order**, and `since` keeps polling efficient.
