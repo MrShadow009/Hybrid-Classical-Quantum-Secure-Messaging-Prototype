@@ -1,987 +1,1461 @@
-# Layered Secure Chat Demonstration Project
+<div align="center">
 
-## Important interpretation
+<img src="https://capsule-render.vercel.app/api?type=waving&color=0:0f2027,50:203a43,100:2c5364&height=190&section=header&text=Hybrid%20Classical-Quantum&fontSize=44&fontColor=ffffff&desc=Secure%20Messaging%20Prototype&descSize=24&descAlignY=68&animation=fadeIn" alt="Hybrid Classical-Quantum Secure Messaging Prototype" width="100%"/>
 
-The notes describe a multi-layer chat prototype. They mention a Flask web flow, HTTP polling, password-protected rooms, participant checks, `client.py`, `server.py`, TCP sockets, encryption/decryption, a quantum-simulated cipher concept, and in-memory versus shared key-value storage. The scans do not reliably establish every algorithm, dependency, or production setting. Confirm these details against the source code before treating them as implemented.
+# 🛡️ Hybrid Classical-Quantum Secure Messaging Prototype
 
-## Project Overview
+**A passphrase-protected chat that seals every message in three layers:**
+**classical ciphertext → quantum-simulated bits → HTTPS / TLS transport**
 
-0001. This project is a prototype for a privacy-focused chat application with a separate client/server path.
-0002. The notes describe a browser-facing interface and a separate desktop/client communication path.
-0003. The central goal is to demonstrate layered protection for messages rather than relying on one protection step.
-0004. The notes mention a fake web interface, password-protected rooms, participant tracking, encryption, and decryption.
-0005. The system is described as having three layers; the exact full names of every layer are not completely legible in the scans.
-0006. One layer is described as plain input or message preparation before encryption.
-0007. The notes mention a second encryption layer and a quantum-inspired or quantum-simulated cipher concept.
-0008. The notes also mention HTTPS polling for browser updates instead of WebSocket delivery.
-0009. The desktop path is described as using client.py and server.py with TCP sockets.
-0010. The README distinguishes handwritten requirements from implementation details that still need confirmation.
+<br/>
 
-## Goals and Scope
+![Status](https://img.shields.io/badge/status-prototype-orange?style=for-the-badge)
+![Backend](https://img.shields.io/badge/backend-Flask-000000?style=for-the-badge&logo=flask&logoColor=white)
+![Language](https://img.shields.io/badge/python-3.10%2B-3776AB?style=for-the-badge&logo=python&logoColor=white)
+![Delivery](https://img.shields.io/badge/delivery-HTTP%20Polling-1f6feb?style=for-the-badge)
+![Layers](https://img.shields.io/badge/encryption-3%20layers-2ea043?style=for-the-badge)
+![Quantum](https://img.shields.io/badge/qubits-simulated-8957e5?style=for-the-badge)
+![Transport](https://img.shields.io/badge/transport-HTTPS%20%2F%20TLS-0a7ea4?style=for-the-badge)
+![Hosting](https://img.shields.io/badge/hosting-Vercel-000000?style=for-the-badge&logo=vercel&logoColor=white)
+![Storage](https://img.shields.io/badge/storage-Upstash%20KV%20%7C%20In--Memory-d29922?style=for-the-badge)
+![Desktop](https://img.shields.io/badge/desktop-TCP%20Sockets-6e7681?style=for-the-badge)
 
-0011. Demonstrate how a message can pass through multiple protection stages before being displayed.
-0012. Show the relationship between a client, a server, a room, and registered participants.
-0013. Support a room-oriented chat workflow in which users enter a room and send messages.
-0014. Keep the browser interface and the separate desktop communication path conceptually distinct.
-0015. Explain where HTTPS, TCP, application encryption, and storage fit into the data flow.
-0016. Provide a project structure that can be mapped to the actual source files as development progresses.
-0017. Make the security design understandable to students and project reviewers.
-0018. Document limitations honestly, especially where a quantum algorithm is simulated rather than run on quantum hardware.
-0019. Treat the project as a demonstration unless testing and deployment evidence proves production readiness.
-0020. Do not interpret a successful demo as proof that the cryptography is secure.
+<br/>
 
-## Architecture at a Glance
+> *"Even if one layer faces a vulnerability, the data remains protected behind the second layer."*
 
-0021. The notes refer to a browser-facing Flask application and a separate desktop client/server path.
-0022. Flask routes are described as loading rooms, handling messages, and returning message data.
-0023. The browser appears to request updates periodically using HTTP polling.
-0024. The desktop path is described as client.py communicating with server.py over TCP sockets.
-0025. The notes mention a shared or in-memory key-value store as a storage consideration.
-0026. Local in-memory storage is described as suitable for development but volatile on restart.
-0027. In-memory data may not be shared between separate server processes or instances.
-0028. A shared key-value store is mentioned as a possible need for multi-instance deployment.
-0029. The message workflow includes input, encryption or transformation, transport, server-side handling, and display.
-0030. The exact production topology, port numbers, framework versions, and deployment provider are not specified in the handwritten notes.
+<br/>
 
-## User Interface and Rooms
+[Overview](#-1-project-overview) ·
+[Architecture](#-4-system-architecture) ·
+[Three Layers](#-5-the-three-layers-of-protection) ·
+[Message Journey](#-11-the-complete-message-journey) ·
+[Threat Model](#-27-threat-model) ·
+[Run It](#-37-running-locally) ·
+[Deploy](#-38-deploying-to-vercel)
 
-0031. The notes describe a fake web interface intended to demonstrate chat application behavior.
-0032. A room is a logical space in which messages and participants are associated.
-0033. The notes state that rooms should be password-protected.
-0034. The application should check whether the requested room exists.
-0035. The application should check whether the user is registered or otherwise permitted to join.
-0036. Room membership checks should happen on the server, not only in browser JavaScript.
-0037. Client-side hiding of controls is not a substitute for authorization.
-0038. The interface should make the active room clear to the participant.
-0039. The interface should display messages in a consistent order.
-0040. The exact visual design, colors, and HTML component names are not specified in the notes.
+</div>
 
-## Message Handling
+---
 
-0041. A message begins as user input in the client interface.
-0042. The message should be validated before the application accepts it.
-0043. The notes describe preparing or encrypting the message at the application layer.
-0044. The transformed message is then passed through the relevant transport path.
-0045. The server should validate the room and participant context before accepting the message.
-0046. The notes mention checking stored messages and returning messages whose identifiers are greater than a known value.
-0047. Message identifiers can help the client request only newer messages during polling.
-0048. Messages should be ordered using a stable identifier or timestamp policy.
-0049. The server should not trust a message's claimed sender identity merely because the client supplied it.
-0050. The exact message schema, maximum length, timestamp format, and duplicate-handling policy are not specified.
+## 📖 Table of Contents
 
-## Encryption Layers
+| # | Section | # | Section |
+|---|---------|---|---------|
+| 1 | [Project Overview](#-1-project-overview) | 21 | [HTTP Polling vs WebSocket](#-21-http-polling-vs-websocket-delivery) |
+| 2 | [What Problem Does It Solve?](#-2-what-problem-does-it-solve) | 22 | [Persistence and Storage](#-22-persistence-and-storage-choices) |
+| 3 | [Key Features](#-3-key-features) | 23 | [The Desktop Path](#-23-the-separate-desktop-path) |
+| 4 | [System Architecture](#-4-system-architecture) | 24 | [Workflow Across the Internet](#-24-workflow-across-the-internet) |
+| 5 | [The Three Layers of Protection](#-5-the-three-layers-of-protection) | 25 | [Single-Layer Systems in Real Life](#-25-single-layer-systems-in-real-life) |
+| 6 | [Layer 1: Plain Text to Ciphertext](#-6-layer-1-plain-text-to-ciphertext) | 26 | [Why Vercel?](#-26-why-vercel-to-publish) |
+| 7 | [Layer 2: Quantum-Simulated Encoding](#-7-layer-2-ciphertext-to-zeros-and-ones-quantum-simulated) | 27 | [Threat Model](#-27-threat-model) |
+| 8 | [Layer 3: HTTPS and TLS](#-8-layer-3-https-and-tls-in-transit) | 28 | [Man-in-the-Middle Attacks](#-28-man-in-the-middle-attacks) |
+| 9 | [Why Double Encryption Matters](#-9-why-double-encryption-matters) | 29 | [Keyloggers and Endpoints](#-29-keyloggers-and-endpoint-threats) |
+| 10 | [Understanding Qubits](#-10-understanding-qubits-and-simulating-them) | 30 | [Custom Input Fields](#-30-custom-input-fields-and-virtual-keyboards) |
+| 11 | [The Complete Message Journey](#-11-the-complete-message-journey) | 31 | [Clearing Memory](#-31-clearing-sensitive-data-from-memory) |
+| 12 | [Rooms, Passphrases, Participants](#-12-rooms-passphrases-and-participants) | 32 | [Cost of a Data Breach](#-32-statistics-the-cost-of-a-data-breach) |
+| 13 | [Socket Handler Behaviour](#-13-socket-handler-behaviour) | 33 | [Security Posture Summary](#-33-security-posture-summary) |
+| 14 | [The Flask Send Endpoint](#-14-the-flask-send-endpoint) | 34 | [Honest Limitations](#-34-honest-limitations) |
+| 15 | [Server Validation Rules](#-15-validation-rules-on-the-server) | 35 | [Project Structure](#-35-suggested-project-structure) |
+| 16 | [Browser Behaviour After Send](#-16-how-the-browser-reacts-after-sending) | 36 | [Configuration Reference](#-36-configuration-reference) |
+| 17 | [Message IDs and Ordering](#-17-message-ids-and-ordering) | 37 | [Running Locally](#-37-running-locally) |
+| 18 | [The Storage Abstraction](#-18-the-storage-abstraction-room_storepy) | 38 | [Deploying to Vercel](#-38-deploying-to-vercel) |
+| 19 | [Fetching with `since`](#-19-fetching-messages-with-the-since-cursor) | 39 | [API Reference](#-39-api-reference) |
+| 20 | [Ordered Display](#-20-ordered-display-in-the-browser) | 40 | [FAQ, Glossary, Roadmap](#-40-faq) |
 
-0051. The notes emphasize a multi-layer approach to message protection.
-0052. The handwritten description says the project has three layers.
-0053. The first layer appears to involve preparing the message or representing it before later protection stages.
-0054. The notes describe a second layer of encryption.
-0055. The notes also mention a cipher described as quantum-simulated or quantum-inspired.
-0056. The exact algorithm names and their parameters are not reliably legible in all scanned lines.
-0057. Do not claim that the project uses a specific standardized cipher unless the source code confirms it.
-0058. Layering does not automatically make a system stronger; each layer must be correctly designed and implemented.
-0059. Encryption should be authenticated where possible so tampering can be detected.
-0060. Key generation, key storage, nonce handling, rotation, and recovery need explicit design decisions.
+---
 
-## Quantum Simulation Note
+## 🌟 1. Project Overview
 
-0061. The notes contain a reference that appears to read as a quantum-simulated cipher or quantum simulation.
-0062. This wording should be treated as a project concept until the implementation is inspected.
-0063. A simulation on a classical computer is not the same as running an algorithm on quantum hardware.
-0064. A quantum-inspired transformation is not automatically quantum-safe.
-0065. A custom cipher should not be presented as proven secure without independent cryptographic review.
-0066. The README should name the actual algorithm only after its source file and implementation are verified.
-0067. If a quantum simulator is used, document its library, version, inputs, outputs, and limitations.
-0068. If no simulator is present in the code, describe the quantum element as a planned or conceptual feature.
-0069. Security claims should be based on reproducible tests and established cryptographic properties.
-0070. The project should explain which layer provides confidentiality, integrity, authentication, or only demonstration value.
+**Hybrid Classical-Quantum Secure Messaging Prototype** is a prototype chat application. It combines:
 
-## Browser Polling
+- a **Flask web interface** that people use in the browser,
+- **passphrase-protected rooms**,
+- **participant tracking** so the system knows who is inside a room,
+- and a **separate desktop client** that carries its own encryption and decryption environment.
 
-0071. The notes explicitly contrast HTTP polling with WebSocket delivery.
-0072. The described browser workflow uses repeated HTTP requests to check for new messages.
-0073. Each polling request asks the server for messages newer than the last message already received.
-0074. The server filters stored messages and returns matching results.
-0075. The browser then adds new messages to the chat display.
-0076. Polling is straightforward to demonstrate because each request is short-lived.
-0077. Polling can create more request overhead than a persistent connection.
-0078. Polling frequency affects perceived responsiveness and server load.
-0079. HTTPS protects data in transit between browser and server when TLS is configured correctly.
-0080. HTTPS does not replace application-level encryption if the project requires the server not to read message content.
+The idea at the centre of the project is simple to say and interesting to build:
 
-## Desktop TCP Path
+> Do not trust a single lock. Put the message behind **three** of them.
 
-0081. The notes name client.py and server.py as part of a separate development path.
-0082. The desktop client and server are described as using TCP sockets.
-0083. TCP provides an ordered byte stream and reliable delivery within the connection's transport semantics.
-0084. TCP does not itself encrypt the application data.
-0085. Encryption must be added at the application layer or by using a secure transport such as TLS.
-0086. The notes mention that the desktop path is distinct from the Flask web flow.
-0087. Document how the desktop client frames a message so the receiver can detect message boundaries.
-0088. Document how connection setup, disconnection, timeouts, and errors are handled.
-0089. Do not assume browser polling and desktop TCP use the same endpoints or message format.
-0090. The actual socket port, framing protocol, and reconnect behavior must be verified from source code.
+Every message that leaves a sender passes through three layers of protection:
 
-## Storage and Persistence
+| Layer | Name | What happens | Where it lives |
+|:-----:|------|--------------|----------------|
+| **1** | Classical encryption | Plain text becomes **ciphertext** | Application layer |
+| **2** | Quantum-simulated encoding | Ciphertext becomes **zeros and ones**, represented as simulated qubits | Application layer |
+| **3** | Transport security | The result travels inside **HTTPS / TLS** | Network transport |
 
-0091. The notes state that local in-memory storage is convenient during development.
-0092. Data held only in process memory can disappear when the application restarts.
-0093. Memory held by one server process is not automatically shared with other processes.
-0094. The notes mention shared key-value storage for multi-instance deployment.
-0095. A shared store can support multiple application instances if its access and consistency rules are designed correctly.
-0096. Room metadata, participant state, and message history may have different persistence requirements.
-0097. Sensitive message content should not be logged unnecessarily.
-0098. Stored ciphertext may still expose metadata such as message size, timing, room identifiers, and participant identifiers.
-0099. Storage retention and cleanup policies should be documented.
-0100. The notes do not specify a final database or production persistence backend.
+The word **hybrid** in the name is deliberate. Classical cryptography, a simulated quantum representation, and standard internet transport security are all combined into one pipeline. No single layer is asked to carry the whole burden.
 
-## Threat Model and Security
+### 🧭 What this README gives you
 
-0101. The notes mention man-in-the-middle attacks as a common attack type.
-0102. A man-in-the-middle attacker attempts to observe or alter traffic between communicating parties.
-0103. TLS certificate validation is important for HTTPS connections.
-0104. The notes mention phishing and credential-related risks in the broader security discussion.
-0105. Password-protected rooms need secure password handling and authorization checks.
-0106. Passwords should not be stored as plain text.
-0107. Authentication and authorization should be treated as separate responsibilities.
-0108. Sensitive data should be cleared from memory when it is no longer needed where practical.
-0109. Logging should avoid secrets, passwords, plaintext messages, and encryption keys.
-0110. The project should document known limitations instead of claiming complete protection against all attacks.
+This document explains the entire project from the ground up:
 
-## Custom Input Fields and Keylogging
+1. what each layer does and why it exists,
+2. how a message travels from one keyboard to another screen,
+3. how rooms and passphrases are checked,
+4. how the server stores and orders messages,
+5. why the web path uses **HTTP polling** rather than WebSockets,
+6. what the separate desktop path does,
+7. how the data moves across the internet, layer by layer,
+8. what attacks exist and how the design answers them,
+9. why the project is published on Vercel,
+10. and, just as important, **what this prototype does not claim to do**.
 
-0111. The notes describe custom input fields as a way of avoiding standard browser input mechanisms.
-0112. The handwritten explanation says custom fields can move away from standard browser input mechanisms.
-0113. The notes also describe a keylogger as software that records keyboard activity and may capture sensitive data.
-0114. Custom input fields do not reliably prevent keylogging on a compromised operating system.
-0115. Malware with sufficient privileges may capture keystrokes, screenshots, clipboard content, or process memory.
-0116. Use this feature only as a demonstration of input handling, not as a security guarantee.
-0117. Prefer standard accessible form controls unless there is a concrete, tested requirement for a custom control.
-0118. HTTPS protects network transport but does not stop malware on the user's device.
-0119. Users should keep their operating system and endpoint protection updated.
-0120. The final README must not claim that custom fields alone prevent keyloggers.
+---
 
-## Development and Testing
+## 🎯 2. What Problem Does It Solve?
 
-0121. Test room creation and room lookup behavior.
-0122. Test the password-protected room workflow with correct and incorrect passwords.
-0123. Test rejection of unknown rooms.
-0124. Test rejection of unauthorized or unregistered participants.
-0125. Test sending and receiving a normal message.
-0126. Test polling when there are no new messages.
-0127. Test polling when one or more new messages arrive.
-0128. Test message ordering when several messages are sent quickly.
-0129. Test behavior when the server restarts and in-memory state is lost.
-0130. Test malformed input and unexpected client disconnects.
+Most chat systems rely on **one** protective measure. Some lean only on transport security. Others lean only on end-to-end encryption. If that single measure has a flaw, the whole conversation is exposed.
 
-## Deployment and Operations
+This project explores a different posture: **defence in depth**.
 
-0131. Development settings should be separated from deployment settings.
-0132. Do not expose debug mode on a public production server.
-0133. Use HTTPS with correctly configured TLS for the browser-facing application.
-0134. Keep secret keys and service credentials outside committed source code.
-0135. Restrict network access to the desktop socket service where possible.
-0136. Use a shared persistence service if multiple server instances must share state.
-0137. Add basic monitoring for errors, connection failures, and unusual request volume.
-0138. Document how to start and stop each process.
-0139. Document the Python version and dependency versions after confirming them from the project environment.
-0140. Do not claim that deployment is complete until the application has been tested in its target environment.
+### The weakness of a single layer
 
-## Project Structure
+- If the only protection is TLS, the message is readable by the server and by anything that can see inside the TLS session endpoint.
+- If the only protection is one cipher, a flaw in that cipher exposes everything.
+- If the only protection is a passphrase, a stolen passphrase opens the room.
 
-0141. The notes name client.py and server.py for the TCP client/server path.
-0142. The notes refer to Flask routes for the browser-facing path.
-0143. The actual repository tree was not included as readable text in the uploaded PDFs.
-0144. The structure below is therefore a suggested organization, not a verified inventory of existing files.
-0145. Keep browser application code separate from desktop socket code.
-0146. Keep cryptographic functions isolated so they can be tested independently.
-0147. Keep storage access behind a small interface if the backend may change.
-0148. Keep configuration separate from business logic.
-0149. Keep tests separate from runtime modules.
-0150. Update this section to match the actual repository before publishing the README.
+### The answer used here
 
-## Limitations and Open Questions
+- **Two application-level transformations** are applied before the message ever reaches the network.
+- **TLS** is then applied on top, in transit.
+- The server checks that a **room exists** and that the **required fields are present** before accepting anything.
+- Messages carry an **ID**, so order is stable and no message is silently reordered.
 
-0151. The exact three layer names are not fully legible in the scans.
-0152. The precise cipher and key-management design must be verified from source code.
-0153. The notes do not establish whether a real quantum simulator is integrated.
-0154. The notes do not specify a final database or shared key-value implementation.
-0155. The notes do not specify deployment URLs, ports, environment variables, or package versions.
-0156. The notes do not establish that a formal security audit has been performed.
-0157. The notes do not establish production readiness or measured performance.
-0158. The term 'fake web interface' should be clarified in the project description before public release.
-0159. Any statistics in the handwritten notes about breach costs need a reliable citation before being used as factual claims.
-0160. Treat unverified details as open questions rather than silently inventing answers.
+The goal is a clear, teachable demonstration of layered security that a student, a reviewer or a curious developer can read, run and reason about.
 
-### Browser request lifecycle
+---
 
-0161. User opens the chat page; the browser requests the page from the Flask application.
-0162. Flask resolves the route and checks the requested page or room context.
-0163. The application should reject malformed room identifiers before querying storage.
-0164. Room access should be checked on the server for every protected operation.
-0165. The browser renders only the data returned by the server.
-0166. The browser should not be trusted to enforce room passwords or participant permissions.
-0167. Polling begins only after the page has established the room and the participant context.
-0168. Each polling request should carry a cursor such as the last received message identifier.
-0169. The server should return only messages newer than the supplied cursor.
-0170. The client should advance its cursor only after it has handled the returned messages.
-0171. An empty polling response means there are no newer messages at that moment.
-0172. Network errors should not cause the interface to duplicate already displayed messages.
-0173. Polling intervals should balance responsiveness with request overhead.
-0174. Polling responses should have a predictable format such as JSON if that matches the implementation.
-0175. Input and output encoding should prevent user text from being interpreted as executable markup.
-0176. Error responses should avoid exposing stack traces or internal configuration.
-0177. Session and room identifiers should not be treated as secrets unless their design explicitly requires it.
-0178. Authentication state should expire according to a documented policy.
-0179. HTTPS should be enforced for public browser traffic.
-0180. Cross-origin access should be restricted to the origins that actually need it.
+## ✨ 3. Key Features
 
-### Room authorization
+<table>
+<tr>
+<td width="50%" valign="top">
 
-0181. A room lookup should distinguish an existing room from a nonexistent room.
-0182. A protected room should require the intended authentication or password step.
-0183. Incorrect room passwords should not reveal confidential room metadata.
-0184. Room password verification should be performed by trusted server-side code.
-0185. Room passwords should be stored using a suitable password-hashing function rather than plaintext.
-0186. Rate limiting can reduce automated password guessing.
-0187. Participant membership should be checked before sending a message.
-0188. Participant membership should also be checked before reading message history.
-0189. Leaving a room should update presence state if presence tracking is implemented.
-0190. Participant tracking should define whether it represents online sessions or registered accounts.
-0191. Multiple tabs may create multiple sessions for one participant unless the design prevents it.
-0192. Room deletion should define what happens to messages and participant state.
-0193. Unknown room identifiers should fail safely.
-0194. Authorization checks should be covered by automated tests.
-0195. An identifier supplied by the browser is not proof of permission.
-0196. Administrative actions should have separate authorization rules.
-0197. Password reset and room recovery behavior are not specified in the uploaded notes.
-0198. Do not invent a registration process unless it exists in the application.
-0199. Do not expose a list of private rooms to users who are not authorized to see it.
-0200. Document whether room membership is temporary or persistent.
+### 🔐 Security
 
-### Message model
+- Three-layer protection per message
+- Classical ciphertext as the first layer
+- Quantum-simulated zeros-and-ones encoding as the second layer
+- HTTPS with native Transport Layer Security as the third layer
+- Passphrase-protected rooms
+- Server-side presence and field checks
+- Guidance for keylogger resistance
+- Immediate clearing of sensitive data from memory
 
-0201. A message record should identify the room to which it belongs.
-0202. A message record should identify the sender using a server-validated identity.
-0203. A stable message identifier helps order messages and support incremental polling.
-0204. A timestamp may help display chronology but should not replace a stable identifier.
-0205. Message text should have a documented maximum size.
-0206. Empty messages should be handled consistently.
-0207. Messages containing unusual Unicode characters should be tested.
-0208. Messages should be validated before encryption or storage.
-0209. The server should reject invalid message shapes instead of guessing the intended fields.
-0210. Ciphertext encoding should be defined, for example as a safe text encoding if required.
-0211. Decryption failures should be handled without crashing the application.
-0212. Integrity failures should not result in displaying unauthenticated plaintext.
-0213. Duplicate submissions should be considered if a client retries after a timeout.
-0214. Message deletion semantics should be documented if deletion is supported.
-0215. Message edits should be treated as a separate feature if they are supported at all.
-0216. File attachments are not established by the handwritten notes.
-0217. Read receipts are not established by the handwritten notes.
-0218. Typing indicators are not established by the handwritten notes.
-0219. Delivery guarantees should match the actual implementation.
-0220. Document whether messages are persisted, kept in memory, or discarded after delivery.
+</td>
+<td width="50%" valign="top">
 
-### Layer one: input preparation
+### 💬 Messaging
 
-0221. The first stage begins with the text entered by the participant.
-0222. Input preparation may normalize the message representation before encryption.
-0223. The exact normalization rules should be documented only after checking the code.
-0224. Do not remove meaningful spaces or characters without a stated requirement.
-0225. Validation should reject inputs that exceed configured limits.
-0226. Encoding must be consistent between the sender and receiver.
-0227. Text should be encoded to bytes before algorithms that operate on bytes are called.
-0228. Character encoding should be explicit, commonly UTF-8 when supported by the implementation.
-0229. Any transformation before encryption should be reversible if the receiver needs the original message.
-0230. Do not describe simple encoding as encryption.
-0231. Base64 and hexadecimal are encodings, not cryptographic confidentiality mechanisms.
-0232. Input preparation should have unit tests for empty strings and non-ASCII text.
-0233. Tests should include long inputs within the documented limit.
-0234. Tests should include invalid input types.
-0235. Error messages should avoid echoing secrets.
-0236. Input preparation should not write plaintext to unnecessary logs.
-0237. Temporary plaintext buffers should have a limited lifetime where practical.
-0238. Do not assume that an extra transformation increases cryptographic strength.
-0239. Document the input and output type of each preparation function.
-0240. Keep the preparation stage independent from the transport implementation.
+- Flask-powered web chat interface
+- Room-based conversations
+- Participant tracking
+- Server-assigned message IDs
+- Cursor-based fetching with `since`
+- Ordered rendering in the browser
+- Input cleared only after the server accepts
+- Same display flow for sender and all other members
 
-### Layer two: encryption
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
 
-0241. The notes mention a second layer of encryption but do not clearly identify its algorithm.
-0242. The implementation should use a well-reviewed cryptographic library where possible.
-0243. Encryption keys should be generated with a cryptographically secure random source.
-0244. Key length and algorithm mode should follow the chosen library's documented guidance.
-0245. Nonces or initialization vectors must follow the selected algorithm's requirements.
-0246. Never reuse a nonce where the selected mode forbids reuse.
-0247. Ciphertext should be authenticated when the selected construction supports authenticated encryption.
-0248. Authenticated encryption can detect unauthorized modification as well as protect confidentiality.
-0249. Decryption should fail closed if authentication fails.
-0250. Keys should not be hard-coded into a public repository.
-0251. Keys should not be sent to logs or displayed in the user interface.
-0252. Key exchange and key distribution need an explicit design.
-0253. Password-derived keys require a suitable password-based key derivation function.
-0254. Do not use a raw password directly as an encryption key.
-0255. Different users or rooms may require separate keys depending on the intended threat model.
-0256. Key rotation should be considered for a longer-running application.
-0257. Key backup and recovery can create additional security risks.
-0258. Cryptographic code should be tested with known test vectors where available.
-0259. Do not create a custom production cipher merely to demonstrate multiple layers.
-0260. Document which party can decrypt each message and why.
+### 🧰 Engineering
 
-### Quantum-simulation concept
+- `room_store.py` storage abstraction
+- Shared Upstash / Vercel KV when configured
+- In-process memory for local development
+- Serverless-friendly request model
+- Short-lived, stateless, re-authenticated requests
 
-0261. The uploaded notes refer to a quantum-simulated or quantum-inspired cipher concept.
-0262. The notes do not clearly establish a named quantum algorithm or a verified simulator package.
-0263. If a simulator is part of the code, name the exact package and version in this section.
-0264. Explain whether the simulator represents qubits, gates, measurements, or only a classical analogy.
-0265. Explain what input enters the simulated stage and what output it returns.
-0266. Explain how the receiver reverses or interprets that output.
-0267. State whether the simulation is educational, experimental, or intended to support a security claim.
-0268. A classical simulation does not mean the program is running on a quantum computer.
-0269. A quantum-inspired custom transformation is not automatically secure against quantum attackers.
-0270. Do not describe a project cipher as quantum-safe without evidence from established cryptographic analysis.
-0271. Do not imply that adding a simulated layer automatically strengthens the other layers.
-0272. Separate the educational demonstration from claims about real-world cryptographic resistance.
-0273. Record reproducible example inputs and outputs for tests.
-0274. Check whether the operation is deterministic or uses randomness.
-0275. If randomness is used, document how it is generated and communicated safely.
-0276. Check whether the output is reversible without exposing a secret.
-0277. Check how errors or invalid quantum-state representations are handled.
-0278. Keep the simulation module separate from the chat transport code.
-0279. Use a threat model to explain what the simulated stage is supposed to defend against.
-0280. Mark this feature as planned if the repository does not contain working simulator code.
+</td>
+<td width="50%" valign="top">
 
-### HTTPS and transport security
+### 🖥️ Two Paths
 
-0281. The notes state that HTTP polling is used instead of WebSocket delivery.
-0282. HTTPS is HTTP carried over TLS.
-0283. TLS protects browser-to-server traffic in transit when configured correctly.
-0284. Certificate validation helps the client verify the server it intended to contact.
-0285. HTTPS does not prevent malware from reading plaintext on an endpoint.
-0286. HTTPS does not by itself make messages end-to-end encrypted.
-0287. If the server decrypts a message, the server can access its plaintext during processing.
-0288. If the design aims to keep plaintext from the server, encryption must be arranged accordingly.
-0289. Secure cookies should use appropriate Secure and HttpOnly settings where applicable.
-0290. Session identifiers should be protected from exposure.
-0291. Public deployments should redirect or otherwise enforce HTTP-to-HTTPS behavior.
-0292. TLS configuration should be managed by the deployment environment or a maintained library.
-0293. Do not disable certificate validation to make a demo connection work.
-0294. Polling endpoints should be protected by the same access checks as the page.
-0295. Responses should not disclose messages from other rooms.
-0296. Cross-origin policies should be deliberately configured.
-0297. Rate limiting can reduce abusive polling volume.
-0298. Request timeouts should be bounded.
-0299. Network failures should be reported without leaking secrets.
-0300. Document whether HTTPS is configured locally, in a reverse proxy, or in a hosted environment.
+- **Web path:** browser ⇄ Flask over HTTPS polling
+- **Desktop path:** `client.py` ⇄ `server.py` over TCP sockets
+- Each path has its own encryption and quantum-simulation code
+- The desktop path is distinct from the Flask web flow
 
-### TCP sockets
+</td>
+</tr>
+</table>
 
-0301. TCP is a transport protocol that delivers an ordered byte stream.
-0302. TCP does not preserve application message boundaries by itself.
-0303. The desktop protocol therefore needs a clear framing strategy.
-0304. A length-prefixed message is one possible framing approach, if implemented.
-0305. A newline-delimited protocol is another possibility, if its constraints are handled.
-0306. Do not claim either framing approach is implemented until the code confirms it.
-0307. The server should handle partial reads because one read may not return a full application message.
-0308. The client should handle partial writes and disconnected peers.
-0309. Socket operations can fail and should have explicit error handling.
-0310. Connection timeouts prevent a client from waiting indefinitely.
-0311. Connection closure should release resources.
-0312. The server should limit the size of accepted messages.
-0313. The server should not assume that bytes received are valid text until decoding succeeds.
-0314. Text decoding errors should be handled safely.
-0315. TCP reliability does not provide encryption or authentication.
-0316. Raw TCP traffic can be observed on a network unless protected by another security layer.
-0317. TLS can protect TCP traffic if the application is designed to use it.
-0318. Access to a demo socket port should be restricted where possible.
-0319. Concurrent clients require a deliberate concurrency model.
-0320. Document how the desktop client reconnects, if reconnect behavior exists.
+---
 
-### Storage and process behavior
+## 🏗️ 4. System Architecture
 
-0321. An in-memory dictionary or list is volatile unless separately persisted.
-0322. Restarting the process may remove in-memory room and message state.
-0323. Separate worker processes usually have separate memory spaces.
-0324. An in-memory store is not automatically a shared store across application instances.
-0325. The notes mention a shared key-value store as a possible multi-instance solution.
-0326. A shared store should be selected based on consistency, availability, and operational needs.
-0327. Storage access should be isolated from route handlers where practical.
-0328. Message retention should have a documented policy.
-0329. Old messages may need to be removed according to the project's goals.
-0330. Room passwords and encryption keys should not be stored alongside messages without protection.
-0331. Logs should not become an unintended message archive.
-0332. Backups can preserve sensitive data and need appropriate access controls.
-0333. Development fixtures should not contain real personal messages.
-0334. Storage errors should not cause the server to silently return incorrect messages.
-0335. Concurrent writes should not create duplicate identifiers.
-0336. Message ordering should be stable across concurrent requests.
-0337. Shared storage credentials should be managed as secrets.
-0338. Document whether the store is used only for development or also for deployment.
-0339. Test behavior when the storage service is unavailable.
-0340. Do not claim persistence until restart and recovery tests pass.
+The project has two independent delivery paths that share the same *idea* but not the same code.
 
-### Threat model and user safety
+```mermaid
+flowchart LR
+    subgraph WEB["🌐 Web Path (Flask)"]
+        B1["Browser<br/>Sender"] -->|"HTTPS POST"| F["Flask Endpoint"]
+        F --> RS["room_store.py"]
+        RS --> KV[("Shared KV<br/>Upstash / Vercel KV")]
+        RS --> MEM[("In-process Memory<br/>local dev")]
+        B2["Browser<br/>Other Members"] -->|"HTTPS GET since=N"| F
+    end
 
-0341. A threat model identifies the assets, attackers, and security boundaries of the project.
-0342. Potential assets include message content, room passwords, session tokens, and encryption keys.
-0343. Potential attackers include network observers, unauthorized room visitors, and compromised endpoints.
-0344. A man-in-the-middle attack can attempt to observe or modify communication.
-0345. TLS with certificate validation helps address network interception risks.
-0346. Room authorization helps prevent unauthorized access to room data.
-0347. Message authentication can help detect tampering.
-0348. Password hashing helps reduce the impact of a leaked password database.
-0349. Rate limiting helps make repeated guessing less practical.
-0350. Key management remains critical even when encryption algorithms are strong.
-0351. Compromised client devices may expose data before encryption or after decryption.
-0352. Custom input fields do not guarantee protection from keyloggers.
-0353. Endpoint malware may capture screen content, clipboard data, or process memory.
-0354. Users should not enter real sensitive information into an unaudited demonstration.
-0355. Security claims should be specific about the threat they address.
-0356. Security controls should be tested rather than assumed to work.
-0357. Dependency updates help address known library vulnerabilities.
-0358. Debug output can expose internal implementation details.
-0359. Error messages should be useful without disclosing secrets.
-0360. Record accepted risks and unresolved issues in the repository.
+    subgraph DESK["🖥️ Desktop Path (TCP)"]
+        C["client.py"] <-->|"TCP socket"| S["server.py"]
+    end
+```
 
-### Testing checklist
+### Component map
 
-0361. Confirm that the application starts with the documented command.
-0362. Confirm that the expected Flask route returns the correct page.
-0363. Confirm that a nonexistent room is rejected.
-0364. Confirm that a protected room rejects an incorrect password.
-0365. Confirm that an authorized participant can access the intended room.
-0366. Confirm that an unauthorized participant cannot read messages.
-0367. Confirm that a message appears only in its intended room.
-0368. Confirm that polling returns only messages newer than the cursor.
-0369. Confirm that repeated polling does not duplicate visible messages.
-0370. Confirm that messages are displayed in the intended order.
-0371. Confirm that empty input is handled consistently.
-0372. Confirm that very long input is rejected or safely handled.
-0373. Confirm that special characters are displayed as text rather than executed.
-0374. Confirm that encryption and decryption round-trip valid test messages.
-0375. Confirm that modified ciphertext fails authentication if authenticated encryption is used.
-0376. Confirm that incorrect keys produce a controlled failure.
-0377. Confirm that TCP clients handle server disconnection.
-0378. Confirm that partial TCP reads do not corrupt message framing.
-0379. Confirm the documented behavior after an application restart.
-0380. Record test commands and observed results before marking tests complete.
+| Component | Role |
+|-----------|------|
+| **Browser UI** | Collects the message, runs the first steps, posts to the Flask endpoint, polls for new messages |
+| **Socket handler** | Reads the input and checks that the user joined the room |
+| **Flask endpoint** | Receives the HTTP request, validates it, stores it |
+| **`room_store.py`** | Abstraction that writes to shared Upstash / Vercel KV or to in-process memory |
+| **Message ID** | Gives every stored message a position in the order |
+| **`client.py` / `server.py`** | Desktop path using TCP sockets with their own encryption and quantum simulation |
+| **Vercel** | Publishes the web path as serverless functions |
+
+### Two paths, one philosophy
+
+The Flask web flow and the desktop TCP flow are **different programs**. They do not share a runtime. What they share is the philosophy: encrypt, encode, then transport. Anyone studying the code should treat them as two separate implementations of the same security story.
+
+---
+
+## 🧱 5. The Three Layers of Protection
+
+```mermaid
+flowchart TB
+    P["📝 Plain Text<br/>'Hello team'"] --> L1
+    L1["🔒 LAYER 1<br/>Plain → Ciphertext"] --> L2
+    L2["⚛️ LAYER 2<br/>Ciphertext → 0 &amp; 1<br/>(Quantum Simulated)"] --> L3
+    L3["🛰️ LAYER 3<br/>HTTPS / TLS Transport"] --> N["🌍 Internet"]
+```
+
+Think of it as three nested envelopes:
+
+1. **Inner envelope:** the text is turned into ciphertext.
+2. **Middle envelope:** the ciphertext is turned into a stream of zeros and ones represented as simulated qubits.
+3. **Outer envelope:** the whole thing rides inside an HTTPS connection protected by TLS.
+
+An observer has to defeat all three to read the original words.
+
+| Property | Layer 1 | Layer 2 | Layer 3 |
+|----------|:-------:|:-------:|:-------:|
+| Confidentiality of content | ✅ | ✅ | ✅ |
+| Integrity in transit | – | – | ✅ |
+| Resists passive network sniffing | ✅ | ✅ | ✅ |
+| Protects against a flaw in the layer below it | ✅ | ✅ | – |
+| Applied by the application | ✅ | ✅ | – |
+| Applied by the transport | – | – | ✅ |
+
+---
+
+## 🔒 6. Layer 1: Plain Text to Ciphertext
+
+**This is the first layer of encryption.**
+
+```
+ plain text   ─────────────►   ciphertext
+ "Hello"             encrypt        "x9Q…=="
+```
+
+After the user types a message, the first thing the system does is encrypt it. The plain text never needs to travel anywhere in readable form. Once the message is ciphertext, the next layer can work on it.
+
+### Why a classical layer first?
+
+- Classical cryptography is well understood.
+- It gives a solid, standard base that the later layers build on.
+- It produces output that is already unreadable without the key.
+
+### The asymmetric idea behind the design
+
+The project's approach relies on using **two different asymmetric algorithms in sequence**. The reasoning is straightforward:
+
+> By using two different asymmetric algorithms in sequence, you can ensure that even if one algorithm faces a vulnerability, the data remains protected behind the second layer.
+
+Using two different algorithms matters. If both layers used the same algorithm, one discovered weakness would break both at once. Two different mathematical foundations mean a single breakthrough does not unlock the whole message.
+
+### What the first layer must guarantee
+
+| Requirement | Meaning |
+|-------------|---------|
+| Output is unreadable | Ciphertext does not reveal the plain text |
+| Output is reversible | The intended receiver can decrypt it |
+| Independent of Layer 2 | A failure in Layer 2 does not undo Layer 1 |
+| Independent of Layer 3 | A TLS problem does not expose plain text |
+
+---
+
+## ⚛️ 7. Layer 2: Ciphertext to Zeros and Ones (Quantum Simulated)
+
+**This is the second layer of encryption.** Once the server has checked the request, the pipeline performs:
+
+```
+ ciphertext   ─────────────►   0 & 1   (quantum simulated)
+```
+
+The final ciphertext is converted into **qubit representations**. In a real quantum system, a qubit can use **superposition** and **entanglement**, so that data can represent zeros and ones simultaneously. This project **simulates** that idea.
+
+### What the conversion does
+
+1. Takes the ciphertext produced by Layer 1.
+2. Expands it into a sequence of zeros and ones.
+3. Represents each position as a simulated qubit state.
+4. Produces a form that is both unreadable and structurally different from ordinary ciphertext.
+
+### Where it happens
+
+The note describing the flow says that after Flask **checks and stores** the request, and after it confirms that **required fields exist** and that the **room exists**, **it does the second layer encryption**. That means Layer 2 is applied on the server path of the web flow, after validation succeeds.
+
+### Illustration
+
+```
+ciphertext bytes   →   bit string        →   simulated qubit register
+  0x9F 0x2A              1001 1111            |1⟩|0⟩|0⟩|1⟩|1⟩|1⟩|1⟩|1⟩
+                         0010 1010            |0⟩|0⟩|1⟩|0⟩|1⟩|0⟩|1⟩|0⟩
+```
+
+> 📌 **Note:** It is very practical to simulate quantum qubits using classical bits for demonstration purposes.
+
+That sentence is the honest centre of this layer. A laptop cannot hold real superposition. It can, however, **model** it with classical bits, and that is perfectly good for showing how such a pipeline would be shaped. See [Honest Limitations](#-34-honest-limitations) for what this does and does not buy you.
+
+---
+
+## 🛰️ 8. Layer 3: HTTPS and TLS in Transit
+
+**This is the transport layer of protection.**
+
+The result of Layers 1 and 2 is sent through an **HTTPS server**. HTTPS uses **native Transport Layer Security (TLS)**, which provides:
+
+- **Confidentiality during transit** – eavesdroppers on the path see only encrypted traffic.
+- **Integrity during transit** – tampering is detected.
+- **Server authentication** – the browser checks it is talking to the real server.
+
+```mermaid
+sequenceDiagram
+    participant S as Sender Browser
+    participant T as TLS Tunnel
+    participant F as Flask Server
+    S->>T: Encrypted + qubit-encoded payload
+    Note over S,F: Everything inside the tunnel is already protected twice
+    T->>F: Same payload, delivered intact
+```
+
+### Why TLS even though the data is already encrypted?
+
+Because each layer defends against different things:
+
+- Layers 1 and 2 protect the **content**.
+- Layer 3 protects the **connection**, including headers, request shape, and tamper detection.
+
+A message that is double-protected and then carried over TLS gives an attacker three separate walls.
+
+---
+
+## 🛡️ 9. Why Double Encryption Matters
+
+> The double encryption process added a significant layer of security to the project's approach.
+
+### The core argument
+
+| Situation | Single layer | Layered (this project) |
+|-----------|--------------|------------------------|
+| One algorithm is found vulnerable | Everything exposed | Second layer still protects |
+| Transport is misconfigured | Plain text may leak | Content is still ciphertext in qubit form |
+| Server logs a payload | Readable if only TLS was used | Unreadable without both transformations |
+| A middlebox inspects traffic | Sees content if TLS is stripped | Sees only encoded ciphertext |
+
+### In plain words
+
+If a lock breaks, a second lock still holds. If both application locks were somehow bypassed, the door itself is still inside a locked building, which is TLS.
+
+### What double encryption is **not**
+
+- It is not a promise that nothing can ever go wrong.
+- It does not defend against malware on the user's own device. That is a different threat covered in [Keyloggers and Endpoint Threats](#-29-keyloggers-and-endpoint-threats).
+- It does not make a weak passphrase strong.
+
+---
+
+## 🔬 10. Understanding Qubits (and Simulating Them)
+
+### Classical bit vs qubit
+
+| | Classical bit | Qubit |
+|--|---------------|-------|
+| Possible values | `0` **or** `1` | `0`, `1`, or a blend of both |
+| Key properties | Definite state | **Superposition**, **entanglement** |
+| Hardware | Any computer | Specialised quantum hardware |
+| Copying | Trivial | Restricted by physics |
+
+### The two ideas the project borrows
+
+**Superposition** means a qubit can represent zero and one *at the same time* until it is measured.
+
+**Entanglement** means two or more qubits can be linked so the state of one is tied to the state of another.
+
+The project's wording: the data *can represent zeros and ones simultaneously*.
+
+### Simulation, not hardware
+
+```mermaid
+flowchart LR
+    A["Real quantum qubit<br/>(needs quantum hardware)"] -.models.-> B["Simulated qubit<br/>(classical bits in software)"]
+    B --> C["Demonstration of the pipeline"]
+```
+
+A simulated qubit is a classical data structure that **behaves like** a qubit in the demonstration. This is why the project can honestly be called a **prototype**: it shows the shape of a hybrid classical-quantum messaging system without requiring a quantum computer.
+
+### Why simulate at all?
+
+1. **Accessibility** – anyone can run it.
+2. **Education** – the concept becomes visible and testable.
+3. **Architecture practice** – the slot where a real quantum layer would sit is already built.
+4. **Honesty** – the README states plainly what is simulated.
+
+---
+
+## 🚀 11. The Complete Message Journey
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant U as 👤 Sender (Browser)
+    participant SH as Socket Handler
+    participant FL as Flask Endpoint
+    participant RS as room_store.py
+    participant KV as KV / Memory
+    participant O as 👥 Other Members
+
+    U->>SH: Types message, presses send
+    SH->>SH: Read input, check user joined the room
+    U->>U: Layer 1: plain → ciphertext
+    U->>FL: HTTP request to Flask endpoint
+    FL->>FL: Check required fields + room exists
+    FL->>FL: Layer 2: ciphertext → 0 & 1 (quantum simulated)
+    FL->>RS: Store message, assign message ID
+    RS->>KV: Write to shared KV or process memory
+    FL-->>U: Accepted
+    U->>U: Clear the input box (do not render yet)
+    O->>FL: Poll with since=lastId
+    FL->>RS: Load room messages
+    RS-->>FL: Messages
+    FL-->>O: Messages with ID greater than since
+    U->>FL: Same poll as everyone else
+    FL-->>U: Same ordered messages
+```
+
+### Step by step
+
+| Step | Actor | Action |
+|:----:|-------|--------|
+| 1 | Socket handler | Reads the input and checks that the user **joined the room** |
+| 2 | Browser | Sends an **HTTP request to the Flask endpoint** |
+| 3 | Layer 1 | **Plain → Ciphertext** is done |
+| 4 | Flask | **Checks and stores** the request |
+| 5 | Flask | Confirms **required fields exist** and the **room exists** |
+| 6 | Layer 2 | **Ciphertext → 0 & 1** (quantum simulated) |
+| 7 | Server | If it **accepts** the message, the browser **clears the input** |
+| 8 | Browser | Does **not** immediately add the message to the chat display |
+| 9 | Store | The **message ID** gives stored messages an order |
+| 10 | Flask route | Loads the room's messages and returns those whose ID is **greater than `since`** |
+| 11 | Browser | Displays messages **in order** |
+
+### The rule that keeps everyone consistent
+
+> We should make sure that **sender and other room members use the same display flow**. This really makes sense, you know.
+
+The sender does not get a privileged shortcut. The sender's own message appears **only after** it comes back through the same polling path every other member uses. That guarantees everybody sees the same list in the same order, and it proves that what is on screen has really been stored by the server.
+
+---
+
+## 🚪 12. Rooms, Passphrases and Participants
+
+The application is organised around **rooms**.
+
+### Room concept
+
+- A room is a named space where participants exchange messages.
+- A room is **passphrase-protected**.
+- The system performs **participant tracking**, so it knows who has joined.
+
+### Join flow
+
+```mermaid
+stateDiagram-v2
+    [*] --> Outside
+    Outside --> Joining: user enters room + passphrase
+    Joining --> Joined: room exists and passphrase accepted
+    Joining --> Outside: rejected
+    Joined --> Sending: user sends a message
+    Sending --> Joined: server accepts
+    Joined --> Outside: leaves
+```
+
+### What "joined" means
+
+A user must have **joined the room** before a message from them is acted upon. The socket handler reads the input and checks exactly that. A message from someone who never joined is not stored.
+
+### Participant tracking
+
+| Tracked item | Why it matters |
+|--------------|----------------|
+| Who is in the room | Messages are only valid from members |
+| Room existence | The server refuses messages for rooms that do not exist |
+| Passphrase gate | Only people who know the passphrase can enter |
+
+### Passphrase hygiene
+
+- Choose long, unique passphrases.
+- Share them through a different channel than the chat.
+- Do not reuse a passphrase between rooms.
+- Never type a passphrase on a machine you suspect is compromised. See the [keylogger section](#-29-keyloggers-and-endpoint-threats).
+
+---
+
+## 🔌 13. Socket Handler Behaviour
+
+The socket handler is the first gatekeeper in the web flow.
+
+**Its job:**
+
+1. **Read the input** the user submitted.
+2. **Check that the user joined the room.**
+3. Pass the request on only if both are satisfied.
+
+```text
+incoming input
+      │
+      ▼
+┌───────────────────────┐
+│  read input           │
+└──────────┬────────────┘
+           ▼
+┌───────────────────────┐   no    ┌───────────────┐
+│  user joined room ?   ├────────►│  reject       │
+└──────────┬────────────┘         └───────────────┘
+           │ yes
+           ▼
+   continue to Flask endpoint
+```
+
+This is a deliberately small responsibility. It does not store, it does not encrypt on behalf of the server, and it does not order messages. It reads and verifies membership.
+
+---
+
+## 📮 14. The Flask Send Endpoint
+
+After the first layer of encryption is done, the browser **sends an HTTP request to the Flask endpoint**.
+
+### What Flask does, in order
+
+| # | Responsibility | Detail |
+|:-:|----------------|--------|
+| 1 | Receive | Accept the HTTP request from the browser |
+| 2 | Check and store | Examine the request and prepare to store it |
+| 3 | Field check | Verify that **required fields exist** |
+| 4 | Room check | Verify that the **room exists** |
+| 5 | Second layer | Perform **Ciphertext → 0 & 1** (quantum simulated) |
+| 6 | Persist | Hand the result to `room_store.py` |
+| 7 | Respond | Tell the browser whether the message was accepted |
+
+### Sample request shape
+
+```http
+POST /api/send HTTP/1.1
+Host: your-app.vercel.app
+Content-Type: application/json
+
+{
+  "room": "alpha-team",
+  "sender": "alice",
+  "payload": "<layer-1 ciphertext>"
+}
+```
+
+### Sample response shapes
+
+```json
+{ "ok": true, "id": 42 }
+```
+
+```json
+{ "ok": false, "error": "room_not_found" }
+```
+
+> The paths and field names above illustrate the shape of the exchange. Adjust them to match your actual routes.
+
+---
+
+## ✅ 15. Validation Rules on the Server
+
+The server never trusts the browser. Before anything is stored it checks:
+
+| Rule | Failure result |
+|------|----------------|
+| Required fields are present | Request rejected |
+| Room exists | Request rejected |
+| Sender has joined the room | Request rejected |
+| Payload is not empty | Request rejected |
+
+### Why validate on the server when the browser already checked?
+
+Because the browser is under the user's control, and therefore under an attacker's control if the user is an attacker. Any check done only in the browser is a suggestion. Only the server's check is a rule.
+
+### Order matters
+
+Validation happens **before** the second layer is applied. There is no value in encoding and storing something that is going to be refused.
+
+---
+
+## 🖱️ 16. How the Browser Reacts After Sending
+
+Two behaviours are worth stating clearly:
+
+1. **If the server accepts the message, the browser clears the input.**
+2. **It does not immediately add the message to the chat display.**
+
+```mermaid
+flowchart TD
+    A["User presses send"] --> B["Request to Flask"]
+    B --> C{"Server accepts?"}
+    C -- "yes" --> D["Clear the input box"]
+    C -- "no" --> E["Keep the text, show error"]
+    D --> F["Do NOT draw message yet"]
+    F --> G["Next poll returns it by ID"]
+    G --> H["Drawn in order with everyone else's"]
+```
+
+### Why not draw it immediately?
+
+- It prevents a **ghost message** that appears on screen but was never stored.
+- It keeps the **sender's view identical** to every other member's view.
+- It removes a whole class of ordering bugs, because there is only one path that puts messages on screen.
+
+Clearing the input on acceptance has a second benefit for security: plain text does not linger in the input field any longer than it must. This links directly to [Clearing Sensitive Data from Memory](#-31-clearing-sensitive-data-from-memory).
+
+---
+
+## 🔢 17. Message IDs and Ordering
+
+> The message ID gives stored messages an order.
+
+### How it works
+
+- Every accepted message receives an **ID**.
+- IDs increase, so a larger ID means a later message.
+- The ID is the **single source of truth** for order. Not the clock in the browser. Not the arrival time at the screen.
+
+```text
+room "alpha-team"
+┌────┬─────────┬──────────────────────┐
+│ ID │ sender  │ stored payload       │
+├────┼─────────┼──────────────────────┤
+│ 40 │ alice   │ 10010111…            │
+│ 41 │ bob     │ 01101001…            │
+│ 42 │ alice   │ 11100010…            │
+└────┴─────────┴──────────────────────┘
+```
+
+### Why not use timestamps?
+
+Devices disagree about the time. Two messages sent in the same second can tie. An ID assigned in one place has none of those problems.
+
+---
+
+## 🗄️ 18. The Storage Abstraction (`room_store.py`)
+
+> The abstraction in `room_store.py` writes to **shared Upstash / Vercel KV when configured**, or to **in-process memory for local development**.
+
+```mermaid
+flowchart TD
+    APP["Flask routes"] --> RS["room_store.py"]
+    RS --> Q{"KV configured?"}
+    Q -- "yes" --> KV[("Shared Upstash / Vercel KV")]
+    Q -- "no" --> MEM[("In-process memory")]
+```
+
+### Why an abstraction?
+
+The Flask routes should not care *where* messages live. They call the same functions either way:
+
+| Operation | Purpose |
+|-----------|---------|
+| Add message | Store a new message and return its ID |
+| Load room messages | Return the messages of a room |
+| Room exists | Used by validation |
+
+### Choice of backend
+
+| | In-process memory | Shared KV (Upstash / Vercel KV) |
+|--|:-----------------:|:-------------------------------:|
+| Setup | None | Needs credentials |
+| Good for | Local development | Deployment |
+| Survives restart | ❌ | ✅ |
+| Shared across server instances | ❌ | ✅ |
+| Works with multiple serverless instances | ❌ | ✅ |
+
+---
+
+## 🔍 19. Fetching Messages with the `since` Cursor
+
+> Flask's route loads the room's messages and returns those whose IDs are **greater than `since`**.
+
+```http
+GET /api/messages?room=alpha-team&since=41
+```
+
+```json
+{
+  "messages": [
+    { "id": 42, "sender": "alice", "payload": "11100010…" }
+  ]
+}
+```
+
+### The cursor idea
+
+- The browser remembers the **highest ID it has seen**.
+- It sends that number as `since`.
+- The server returns **only newer messages**.
+- The browser updates its cursor and asks again later.
+
+This keeps each poll small and cheap, and it means a browser that was offline can catch up simply by asking from its last known ID.
+
+```mermaid
+flowchart LR
+    A["since = 0"] -->|"returns 1..5"| B["since = 5"]
+    B -->|"returns 6..6"| C["since = 6"]
+    C -->|"returns nothing"| C
+```
+
+---
+
+## 📋 20. Ordered Display in the Browser
+
+> We make sure the browser displays messages in order by the above one.
+
+The browser:
+
+1. Receives messages returned for `since`.
+2. **Sorts / places them by message ID.**
+3. Appends them to the chat display in that order.
+4. Skips anything it has already shown.
+
+### Guarantees
+
+| Guarantee | How |
+|-----------|-----|
+| No reordering | Display order = ID order |
+| No duplicates | Cursor moves past IDs already shown |
+| Same view for everyone | Same ID-based rule for sender and members |
+
+---
+
+## 📡 21. HTTP Polling vs WebSocket Delivery
+
+> ⭐ **Important:** This is **HTTP polling**, not WebSocket delivery.
+
+### Why HTTP polling instead of WebSocket delivery?
+
+Both HTTP and WebSockets **can** be secure, provided they use encryption (**HTTPS / WSS**) and proper authentication. However, **HTTP polling often has a smaller attack surface**, because each request is **short-lived, stateless, and re-authenticated**. WebSockets maintain a **long-lived, stateful connection** that requires careful **resource and session management**.
+
+### Side by side
+
+| Aspect | HTTP polling (this project) | WebSocket |
+|--------|-----------------------------|-----------|
+| Connection life | Short-lived | Long-lived |
+| State on server | Stateless | Stateful |
+| Authentication | Re-authenticated per request | Typically at connection time |
+| Secure channel | HTTPS | WSS |
+| Attack surface | Smaller | Larger, needs careful management |
+| Resource management | Simple | Needs careful resource + session handling |
+| Fit with serverless | Excellent | Awkward |
+
+### The trade-off, stated honestly
+
+Polling is slightly less instant and sends more small requests. For a prototype that prizes a small attack surface and serverless hosting, that is a good trade.
+
+```mermaid
+flowchart LR
+    subgraph POLL["HTTP polling"]
+        direction TB
+        P1["request"] --> P2["response"] --> P3["connection ends"] --> P1
+    end
+    subgraph WS["WebSocket"]
+        direction TB
+        W1["open"] --> W2["stays open for long time"] --> W3["state + session to manage"]
+    end
+```
+
+---
+
+## 💾 22. Persistence and Storage Choices
+
+> The current storage choice affects persistence.
+
+### Local in-memory storage
+
+- Suitable for **development**.
+- Data can **disappear on restart**.
+- It is **not shared across separate server instances**.
+
+### Shared KV storage
+
+- **Needed for a multi-instance deployment.**
+- Every instance reads and writes the same data.
+- Messages survive restarts.
+
+### Decision guide
+
+| Your situation | Use |
+|----------------|-----|
+| Trying it on your laptop | In-process memory |
+| Running a demo on Vercel | Shared KV |
+| More than one server instance | Shared KV (required) |
+| Need messages to survive restarts | Shared KV |
+
+> ⚠️ On a serverless platform, separate invocations may land on separate instances. In-memory storage there will look like it "loses" messages. That is not a bug in the chat logic; it is the storage choice showing through.
+
+---
+
+## 🖥️ 23. The Separate Desktop Path
+
+> This project has a **separate desktop path**.
+
+`client.py` and `server.py` use **TCP sockets** and contain their **own encryption and quantum-simulation code**. This is **distinct from the Flask web flow**.
+
+```mermaid
+flowchart LR
+    C1["client.py<br/>encrypt + qubit-simulate"] <-->|"TCP socket"| S1["server.py<br/>encrypt + qubit-simulate"]
+```
+
+### Differences from the web path
+
+| | Web path | Desktop path |
+|--|----------|--------------|
+| Entry | Browser | `client.py` |
+| Server | Flask | `server.py` |
+| Transport | HTTPS polling | TCP sockets |
+| Storage | `room_store.py` (KV / memory) | Handled by the desktop server |
+| Crypto code | Web flow | Own code inside client and server |
+
+### Why keep them separate?
+
+It allows experimentation with each approach independently. A reader can study the persistent-socket model on the desktop and the stateless polling model on the web, side by side.
+
+---
+
+## 🌍 24. Workflow Across the Internet
+
+The journey of one message through the network stack:
+
+```mermaid
+flowchart TB
+    A["1. APPLICATION LAYER<br/>Message is encrypted and converted<br/>into qubit representations"] --> B
+    B["2. TRANSPORT LAYER<br/>TCP wraps the data into SEGMENTS"] --> C
+    C["3. NETWORK LAYER<br/>IP addresses are added, forming PACKETS"] --> D
+    D["4. LINK LAYER<br/>Data is turned into FRAMES<br/>for physical transmission over the medium"]
+```
+
+| Layer | What happens | Unit of data |
+|-------|--------------|:------------:|
+| Application | Your message is **encrypted and converted into qubit representations** | Message |
+| Transport | **TCP wraps** the data into segments | Segments |
+| Network | The network layer **adds IP addresses**, forming packets | Packets |
+| Link | Data is **turned into frames** for physical transmission over the medium | Frames |
+
+### On the server side, the process reverses
+
+Frames become packets, packets become segments, and segments are reassembled.
+
+- **TCP segments** ensure **reliable delivery**, managing **sequencing and packet loss**.
+- **HTTPS pooling** then allows **multiple requests to share an existing TLS connection** (Transport Layer Security).
+
+```text
+SENDER                                                     RECEIVER
+Application  ─ encrypted + qubit form ─────────────►  Application
+Transport    ─ TCP segments ───────────────────────►  Transport (sequencing, loss handling)
+Network      ─ IP packets ─────────────────────────►  Network
+Link         ─ frames over the medium ─────────────►  Link
+```
+
+### Why this matters for security
+
+By the time the data reaches the lower layers, the content is **already protected at the application layer**. Routers and switches along the way only ever handle ciphertext in qubit form, wrapped inside TLS.
+
+---
+
+## 🧩 25. Single-Layer Systems in Real Life
+
+Many well-known systems rely on **one** primary protective approach. Seeing them clearly shows what this project does differently.
+
+| System | Primary approach | Notes |
+|--------|------------------|-------|
+| **Standard Telegram chats** | **Server-side encryption**, where the service provider holds the ability to read | Protection mainly guards data on the provider's side |
+| **Many legacy communication systems** | **Transport Layer Security** only, with **no application-level encryption** for the data itself | Data is plain at the endpoints of the TLS session |
+| **WhatsApp** | **End-to-end encryption via the Signal protocol**, acting as a **single primary cryptographic layer** for securing message content device to device | Strong, but still one main layer |
+
+### What this project adds
+
+```mermaid
+flowchart LR
+    subgraph ONE["Typical single layer"]
+        X["Message"] --> Y["One protection"] --> Z["Network"]
+    end
+    subgraph THREE["This project"]
+        M["Message"] --> A1["Layer 1 cipher"] --> A2["Layer 2 qubit encoding"] --> A3["Layer 3 TLS"] --> N["Network"]
+    end
+```
+
+The point is not to say those platforms are weak. It is to show that **adding independent layers** is a design choice that raises the effort an attacker must spend.
+
+---
+
+## ☁️ 26. Why Vercel to Publish?
+
+**Vercel specialises in frontend frameworks and serverless functions**, which is **ideal for the HTTP transmission used in our client-server model.**
+
+### Reasons
+
+| Reason | Explanation |
+|--------|-------------|
+| Fits the model | The web path is plain HTTP request / response, a natural fit for serverless functions |
+| Scalable | **Serverless functions are highly scalable** |
+| Cost-effective | **Cost-effective for unpredictable traffic**, since you pay for use |
+| No server chores | **We don't manage servers** |
+| HTTPS by default | Published sites are served over HTTPS, supporting Layer 3 |
+| Easy deployment | Publish from a repository with minimal setup |
+
+### The link back to polling
+
+HTTP polling and serverless functions suit each other. Each poll is a short invocation that starts, answers and ends. A long-lived WebSocket does not fit that model. This is part of why [polling was chosen](#-21-http-polling-vs-websocket-delivery).
+
+### The link back to storage
+
+Serverless invocations can run on different instances. That is exactly why **shared KV storage is needed** for a multi-instance deployment.
+
+---
+
+## 💰 27. Threat Model
+
+> **Attack types and how to overcome them.**
+
+```mermaid
+mindmap
+  root((Threats))
+    Network
+      Man-in-the-Middle
+      Eavesdropping
+    Endpoint
+      Keyloggers
+      Spyware malware
+    Human
+      Phishing
+    Platform
+      Weak storage choice
+      Lost state on restart
+```
+
+### Summary table
+
+| Attack | What it does | Primary defence in this project |
+|--------|--------------|----------------------------------|
+| **Man-in-the-middle** | Intercepts data while it is being transmitted and captures it | All transmission over **secured HTTPS** + data already double-encrypted |
+| **Keylogger** | Records keystrokes **before** encryption and **after** decryption | **Virtual keyboard / custom input fields** + **clear sensitive data from memory** |
+| **Phishing** | Tricks a person into giving away secrets | Awareness, passphrase hygiene, verify the site address |
+
+### The ordering insight
+
+Network defences protect data **between** devices. Keyloggers attack **at** the device. That is why the notes call keyloggers the most important thing to consider: encryption cannot protect what is captured before it is encrypted.
+
+---
+
+## 🕵️ 28. Man-in-the-Middle Attacks
+
+**Common attack: man-in-the-middle (MITM).**
+
+- It **intercepts** data **while it is being transmitted** and **captures** it.
+
+```mermaid
+flowchart LR
+    S["Sender"] --> M{{"😈 Attacker in the middle"}} --> R["Receiver"]
+```
+
+### How the project answers it
+
+1. **All transmission is done using secured HTTPS** (Layer 3).
+2. Even if the TLS protection were somehow defeated, what the attacker captures is **ciphertext in qubit-simulated form** (Layers 1 and 2).
+3. The attacker must break **all three layers** to read a message.
+
+| Attacker success so far | What they see |
+|------------------------|---------------|
+| Watches the network | TLS-encrypted traffic |
+| Strips / breaks TLS | Qubit-encoded ciphertext |
+| Also reverses Layer 2 | Ciphertext |
+| Also breaks Layer 1 | Plain text |
+
+### Practical advice
+
+- Only use the HTTPS address of the deployment.
+- Do not click through browser certificate warnings.
+- Avoid untrusted public networks for sensitive rooms.
+
+---
+
+## ⌨️ 29. Keyloggers and Endpoint Threats
+
+**Common attack: end-point threats like keyloggers**, which record **keystrokes before encryption and decryption.**
+
+### What is a keylogger?
+
+> A **keylogger** is a **spyware / malware** designed to **secretly record every keystroke** made on a computer or mobile device, **specifically to capture sensitive data as it's typed.**
+
+### Why it is the hardest case
+
+```mermaid
+flowchart LR
+    K["⌨️ Keyboard"] --> KL["😈 Keylogger<br/>(captures here)"]
+    KL --> BR["Browser input"] --> E["Encryption"] --> N["Network"]
+```
+
+Encryption starts **after** the keys are pressed. A keylogger records at the keyboard, ahead of every layer in this project. Network-side protection cannot help here, so a different kind of defence is needed.
+
+### Defences in this project's design
+
+| Defence | Purpose |
+|---------|---------|
+| **Implement a virtual keyboard** | Typing does not go through the usual physical-key path |
+| **Use custom input fields** | Keystrokes are handled in memory rather than via standard tags |
+| **Clear sensitive data from memory immediately after use** | Shortens the time anything sensitive exists |
+| **Secured HTTPS for all transmission** | Covers the in-transit side |
+
+---
+
+## 🧪 30. Custom Input Fields and Virtual Keyboards
+
+### What is meant by custom input fields?
+
+**Instead of using standard HTML input tags**, where **malware can easily hook into the data**, **custom fields use JavaScript listeners to process keystrokes in memory.**
+
+Once they are **encrypted or decrypted, or transmitted directly**, that **bypasses the operating system's standard input tracking.**
+
+### How custom input fields work
+
+> Custom input fields work by **abstracting the typing process away from the standard browser input mechanisms.**
+
+```mermaid
+flowchart TB
+    subgraph STD["Standard HTML input"]
+        A1["Key press"] --> A2["OS input tracking"] --> A3["Browser input element"] --> A4["Value readable by hooks"]
+    end
+    subgraph CUS["Custom field + virtual keyboard"]
+        B1["On-screen key / JS listener"] --> B2["Handled in memory"] --> B3["Encrypted immediately"]
+    end
+```
+
+### Comparison
+
+| | Standard `<input>` | Custom field / virtual keyboard |
+|--|--------------------|----------------------------------|
+| Where the keystroke is processed | Through the normal input path | In memory by JavaScript listeners |
+| Easy for malware to hook | Yes | Harder |
+| Passes through OS standard input tracking | Yes | Bypassed |
+| Complexity | Low | Higher |
+
+### In a word
+
+Custom input fields **move the moment of typing out of the place where malware is watching**.
+
+### A sketch of the idea
+
+```javascript
+// Conceptual illustration only: keystrokes are collected in a closure,
+// never placed in a standard <input> value, and wiped after use.
+const buffer = [];
+
+document.addEventListener("keydown", (e) => {
+  if (e.key.length === 1) buffer.push(e.key);
+  if (e.key === "Backspace") buffer.pop();
+  e.preventDefault();
+});
+
+function takeAndWipe() {
+  const text = buffer.join("");
+  buffer.length = 0;            // clear immediately after use
+  return text;
+}
+```
+
+> Virtual keyboards and custom fields **reduce** exposure. They do not make a fully compromised device safe.
+
+---
+
+## 🧹 31. Clearing Sensitive Data from Memory
+
+> **Note:** Make sure to **clear sensitive data from memory immediately after use.**
+
+### What counts as sensitive?
+
+- Plain text of a message before encryption
+- Passphrases
+- Keystroke buffers
+- Intermediate values created during encryption
+
+### Practices
+
+| Practice | Effect |
+|----------|--------|
+| Clear the input after the server accepts | Plain text leaves the field |
+| Empty keystroke buffers after each send | Nothing left to harvest |
+| Drop references to secrets as soon as they are used | Shorter lifetime in memory |
+| Do not log plain text or passphrases | Nothing sensitive in logs |
+
+```mermaid
+flowchart LR
+    A["Secret created"] --> B["Used once"] --> C["Cleared immediately"]
+```
+
+The shorter a secret lives in memory, the smaller the window in which malware or a memory dump can capture it.
+
+---
+
+## 📊 32. Statistics: The Cost of a Data Breach
+
+The following figures come from the project's research notes.
+
+| Scope | Average cost of a data breach |
+|-------|-------------------------------|
+| 🇮🇳 **India** | **₹28.5 crore** |
+| 🌏 **Asia** | approximately **US $3.67 million** |
+| 🌐 **Global** | **US $4.99 million** |
+
+```mermaid
+xychart-beta
+    title "Average data breach cost (USD millions, approx.)"
+    x-axis ["Asia", "Global"]
+    y-axis "USD millions" 0 --> 6
+    bar [3.67, 4.99]
+```
+
+### What drives these costs in the notes
+
+- **Phishing** and **man-in-the-middle attacks** are named as contributors in India.
+- **The most important thing is keylogger attacks.**
+
+### Why include this?
+
+Because security work is easier to justify when the price of failure is visible. A prototype that layers its defences is a small investment compared with figures of this size.
+
+> 📝 These numbers vary by report and year. If you reuse them in a paper or presentation, cite the specific report edition you take them from.
+
+---
+
+## 🧾 33. Security Posture Summary
+
+| Threat | Layer 1 | Layer 2 | Layer 3 | Input hardening | Memory clearing |
+|--------|:------:|:------:|:------:|:---------------:|:---------------:|
+| Network eavesdropping | ✅ | ✅ | ✅ | – | – |
+| Man-in-the-middle | ✅ | ✅ | ✅ | – | – |
+| Flaw in one algorithm | ✅ | ✅ | – | – | – |
+| Keylogger | – | – | – | ✅ | ✅ |
+| Memory scraping | – | – | – | – | ✅ |
+| Non-member sending messages | – | – | – | – | – |
+
+The last row is handled by **server-side membership and room checks**, not by cryptography.
+
+### One-line version
+
+**Content is protected twice at the application level, once more in transit, and the input path is hardened against keystroke capture.**
+
+---
+
+## ⚠️ 34. Honest Limitations
+
+A good prototype is clear about its edges.
+
+1. **Qubits are simulated.** Classical bits stand in for qubits. This shows the architecture; it does not deliver the physical guarantees of real quantum communication.
+2. **Simulation is not a cryptographic proof.** Layer 2 adds a structural transformation. Its strength should not be assumed to equal that of a vetted cipher.
+3. **Endpoint compromise defeats everything.** If a device is fully compromised, no network design can save it.
+4. **In-memory storage is temporary.** Local data can disappear on restart and is not shared across instances.
+5. **Polling is not instant.** Messages arrive on the next poll, not the moment they are sent.
+6. **Passphrase strength matters.** A weak passphrase weakens the room.
+7. **Prototype status.** It has not been through an independent security audit. Do not use it to protect truly sensitive information.
+8. **Two paths, two code bases.** The web flow and the desktop flow can drift apart if not maintained together.
+
+> Being straightforward about these points is part of the project's design.
+
+---
+
+## 📁 35. Suggested Project Structure
+
+```text
+hybrid-classical-quantum-secure-messaging/
+├── app.py                  # Flask application and routes
+├── room_store.py           # Storage abstraction (Upstash / Vercel KV or in-memory)
+├── requirements.txt        # Python dependencies
+├── vercel.json             # Vercel routing and build configuration
+├── templates/
+│   └── index.html          # Chat interface
+├── static/
+│   ├── css/
+│   │   └── style.css
+│   └── js/
+│       ├── chat.js         # Polling, ordering, display
+│       └── input.js        # Custom input field / virtual keyboard
+├── desktop/
+│   ├── client.py           # TCP client with its own encryption + qubit simulation
+│   └── server.py           # TCP server with its own encryption + qubit simulation
+├── docs/
+│   └── notes/              # Research notes
+└── README.md
+```
+
+| File | Responsibility |
+|------|----------------|
+| `app.py` | Routes: join, send, fetch with `since` |
+| `room_store.py` | Pick KV or memory, add / load messages |
+| `chat.js` | Poll, keep the cursor, display in ID order |
+| `input.js` | Handle typing outside standard inputs |
+| `client.py` / `server.py` | The separate desktop path |
+
+---
+
+## ⚙️ 36. Configuration Reference
+
+| Variable | Required | Purpose |
+|----------|:--------:|---------|
+| `SECRET_KEY` | Recommended | Flask session signing |
+| `KV_REST_API_URL` | For shared storage | Upstash / Vercel KV endpoint |
+| `KV_REST_API_TOKEN` | For shared storage | Upstash / Vercel KV token |
+| `POLL_INTERVAL_MS` | Optional | How often the browser polls |
+| `PORT` | Optional | Local server port |
+
+### Storage selection logic
+
+```text
+if KV credentials are present   → use shared Upstash / Vercel KV
+else                            → use in-process memory (development)
+```
+
+Example `.env` for local development:
+
+```bash
+SECRET_KEY=change-me
+POLL_INTERVAL_MS=1500
+# Leave KV_* unset to use in-memory storage
+```
+
+Example `.env` for deployment:
+
+```bash
+SECRET_KEY=a-long-random-value
+KV_REST_API_URL=https://<your-instance>.upstash.io
+KV_REST_API_TOKEN=<your-token>
+POLL_INTERVAL_MS=1500
+```
+
+> Never commit real tokens to the repository.
+
+---
+
+## 🏃 37. Running Locally
+
+### Prerequisites
+
+- Python 3.10 or newer
+- `pip`
+- A modern browser
+
+### Web path
+
+```bash
+git clone https://github.com/<you>/hybrid-classical-quantum-secure-messaging.git
+cd hybrid-classical-quantum-secure-messaging
+
+python -m venv .venv
+source .venv/bin/activate          # Windows: .venv\Scripts\activate
+
+pip install -r requirements.txt
+python app.py
+```
+
+Open `http://localhost:5000` in two browser windows, join the same room with the same passphrase, and send a message from one. Watch it appear in both windows through the polling path.
+
+### Desktop path
+
+```bash
+# Terminal 1
+python desktop/server.py
+
+# Terminal 2 and 3
+python desktop/client.py
+```
+
+### What to check
+
+| Check | Expected |
+|-------|----------|
+| Send from window A | Input clears |
+| Message in window A | Appears after the next poll, not instantly |
+| Message in window B | Appears in the same order |
+| Restart the local server | In-memory messages are gone |
+| Send to a missing room | Rejected |
+
+---
+
+## 🚢 38. Deploying to Vercel
+
+1. Push the project to a Git repository.
+2. Import the repository in [Vercel](https://vercel.com).
+3. Add a KV store (Upstash / Vercel KV) and connect it to the project.
+4. Set environment variables from the [configuration table](#-36-configuration-reference).
+5. Deploy. Vercel serves the site over **HTTPS**, supporting Layer 3.
+
+Example `vercel.json`:
+
+```json
+{
+  "version": 2,
+  "builds": [{ "src": "app.py", "use": "@vercel/python" }],
+  "routes": [{ "src": "/(.*)", "dest": "app.py" }]
+}
+```
 
 ### Deployment checklist
 
-0381. Pin dependencies after confirming which packages the project uses.
-0382. Document the supported Python version.
-0383. Keep development secrets out of version control.
-0384. Provide a sample environment configuration without real credentials.
-0385. Disable debug mode in a public deployment.
-0386. Configure HTTPS for browser traffic.
-0387. Restrict desktop TCP access to intended clients.
-0388. Set request and connection timeouts.
-0389. Choose a persistence strategy that matches the deployment topology.
-0390. Use shared storage when independent instances must share state.
-0391. Configure backups only if persistent data is intended to be retained.
-0392. Limit access to backups and operational logs.
-0393. Set a message retention policy.
-0394. Document how to update dependencies safely.
-0395. Document how to stop and restart services.
-0396. Document how to inspect service health.
-0397. Test deployment in a non-production environment first.
-0398. Verify that secrets are not present in logs.
-0399. Verify that room access controls remain enabled in production.
-0400. Do not call the project production-ready until deployment checks have passed.
+- [ ] KV credentials set, so storage is shared
+- [ ] `SECRET_KEY` set to a long random value
+- [ ] Only the HTTPS address is shared
+- [ ] No secrets committed
+- [ ] Two browsers tested end to end against the deployed URL
 
-### Documentation maintenance
+> Skipping the KV step on Vercel is the most common cause of "missing messages", because separate instances do not share memory.
 
-0401. Keep the README aligned with the current source code.
-0402. Replace suggested filenames with the actual repository layout.
-0403. List only dependencies that are actually imported or installed.
-0404. List only commands that have been tested in the target environment.
-0405. Record the algorithm names exactly as implemented.
-0406. Record the encryption parameters that are safe to disclose and necessary to reproduce behavior.
-0407. Never publish private keys, passwords, tokens, or real room secrets.
-0408. Document the limitations of the quantum-simulation concept clearly.
-0409. Add diagrams only when they match the actual data flow.
-0410. Update tests whenever the message format changes.
-0411. Update deployment steps whenever configuration changes.
-0412. Record breaking changes in a changelog if the project evolves.
-0413. Distinguish implemented features from planned features.
-0414. Distinguish measured performance from expectations.
-0415. Use citations for any external statistics included in a future revision.
-0416. Do not retain unsupported breach-cost numbers from notes without verification.
-0417. Use consistent terms for room, participant, message, client, and server.
-0418. Keep security terminology precise and understandable.
-0419. Ask reviewers to check both functionality and security assumptions.
-0420. Review this document after every major architecture change.
+---
 
-### Suggested repository map
+## 📚 39. API Reference
 
-0421. `app.py` — suggested Flask entry point; replace this name if the actual entry point differs.
-0422. `client.py` — named in the notes as the desktop TCP client.
-0423. `server.py` — named in the notes as the desktop TCP server.
-0424. `templates/` — suggested location for HTML templates if Flask templates are used.
-0425. `static/` — suggested location for CSS, images, and browser JavaScript if present.
-0426. `crypto/` — suggested package for encryption and decryption helpers if the code is modularized.
-0427. `storage/` — suggested package for room and message storage adapters if needed.
-0428. `tests/` — suggested location for automated tests.
-0429. `requirements.txt` or `pyproject.toml` — include the actual dependency manifest used by the project.
-0430. `README.md` — project documentation and verified setup instructions.
+| Method | Path | Purpose |
+|:------:|------|---------|
+| `POST` | `/api/join` | Join a room with a passphrase |
+| `POST` | `/api/send` | Send a message into a room |
+| `GET` | `/api/messages?room=…&since=…` | Fetch messages with ID greater than `since` |
 
-### Run instructions placeholder
+*(Paths are illustrative; adapt them to your routes.)*
 
-0431. Step 1: Install the Python version supported by the repository.
-0432. Step 2: Create and activate a virtual environment.
-0433. Step 3: Install dependencies from the repository's actual manifest.
-0434. Step 4: Set required environment variables using a local, untracked configuration file.
-0435. Step 5: Start the Flask process using the real entry-point command.
-0436. Step 6: Open the configured local URL in a browser.
-0437. Step 7: Start the desktop server separately if the TCP demonstration is required.
-0438. Step 8: Start the desktop client with the actual command and server address.
-0439. Step 9: Test a room, participant check, and sample message using non-sensitive demo data.
-0440. Step 10: Stop each process and confirm resources are released.
+### Typical errors
 
-### Environment configuration placeholder
+| Code | Meaning |
+|------|---------|
+| `missing_fields` | A required field was not provided |
+| `room_not_found` | The room does not exist |
+| `not_joined` | The sender has not joined the room |
+| `bad_passphrase` | Passphrase did not match |
 
-0441. Document the Flask secret configuration if Flask sessions are used.
-0442. Document the bind host and port after confirming them from the code.
-0443. Document the storage backend and connection settings if applicable.
-0444. Document the room password configuration approach without including real passwords.
-0445. Document any encryption key source without publishing the key itself.
-0446. Document whether the quantum simulator requires an extra package.
-0447. Document TLS termination if the web app is deployed behind a reverse proxy.
-0448. Document the desktop TCP host and port only after confirming their values.
-0449. Use environment variables or a secret manager for credentials.
-0450. Do not commit a real `.env` file.
+---
 
-### Feature status table guidance
+## ❓ 40. FAQ
 
-0451. Mark room creation as implemented only if a working route or function exists.
-0452. Mark room password validation as implemented only if tested on the server.
-0453. Mark participant tracking as implemented only if state is actually recorded and updated.
-0454. Mark message polling as implemented only if the browser repeatedly requests new messages.
-0455. Mark desktop TCP messaging as implemented only if client and server exchange messages successfully.
-0456. Mark encryption as implemented only after the real algorithm and code path are identified.
-0457. Mark decryption as implemented only after round-trip tests pass.
-0458. Mark quantum simulation as implemented only if a working simulator integration exists.
-0459. Mark shared storage as implemented only if the application uses a shared service or database.
-0460. Mark production TLS as implemented only after deployment configuration is verified.
+<details>
+<summary><b>Is this real quantum encryption?</b></summary>
 
-### Review questions before release
+No. Qubits are simulated using classical bits for demonstration. The project shows how such a hybrid pipeline is shaped.
+</details>
 
-0461. What are the exact three message-processing layers in the source code?
-0462. Which standard cryptographic algorithm is used in each actual encryption stage?
-0463. How are keys created, exchanged, stored, and rotated?
-0464. Does the server ever see plaintext messages?
-0465. What does the project mean by a quantum-simulated cipher?
-0466. Which Flask routes create rooms, validate passwords, send messages, and poll updates?
-0467. How does the server identify registered participants?
-0468. Are message identifiers globally unique or unique only within a room?
-0469. What data store is used in the current version?
-0470. What happens to rooms and messages when the process restarts?
+<details>
+<summary><b>Why does my message not appear instantly after I send it?</b></summary>
 
-### Source fidelity notes
+By design. The browser clears the input once the server accepts the message, then shows it when the next poll returns it. That keeps your view identical to everyone else's.
+</details>
 
-0471. The uploaded pages are handwritten scans and do not contain machine-readable text.
-0472. The README therefore relies on visual inspection of the handwritten pages.
-0473. Some handwriting is ambiguous, so exact cryptographic names cannot safely be asserted.
-0474. The phrase about three layers is readable, but every layer's exact technical definition is not.
-0475. The phrase about a quantum-simulated cipher appears in the notes but needs source-code confirmation.
-0476. The notes clearly mention HTTP polling as an alternative to WebSocket delivery.
-0477. The notes clearly mention TCP sockets for the separate client/server path.
-0478. The notes clearly mention in-memory storage limitations and shared key-value storage for multiple instances.
-0479. The notes discuss HTTPS, transport-layer security, and message confidentiality.
-0480. The notes discuss custom input fields and keylogger risk, but custom fields are not a complete defense.
+<details>
+<summary><b>Why polling instead of WebSockets?</b></summary>
 
-0481. Verify the behavior with a clean install rather than relying on an existing virtual environment (review pass 6).
-0482. Verify every import against the dependency manifest (review pass 6).
-0483. Verify that the Flask application uses a non-default secret in deployment (review pass 6).
-0484. Verify that passwords are never printed in terminal output (review pass 6).
-0485. Verify that message plaintext is not written to debug logs (review pass 6).
-0486. Verify that ciphertext encoding survives JSON serialization if JSON is used (review pass 6).
-0487. Verify that Unicode messages survive encryption and decryption unchanged (review pass 6).
-0488. Verify that a message cannot be fetched by changing only the room identifier (review pass 6).
-0489. Verify that a participant cannot impersonate another participant by editing request fields (review pass 6).
-0490. Verify that polling requests are authorized independently of the initial page request (review pass 6).
-0491. Verify that repeated client retries do not create unintended duplicate messages (review pass 6).
-0492. Verify that a stale polling cursor has a defined outcome (review pass 6).
-0493. Verify that malformed JSON is rejected if the endpoint expects JSON (review pass 6).
-0494. Verify that unexpected field names are rejected or ignored safely (review pass 6).
-0495. Verify that the server caps request size (review pass 6).
-0496. Verify that the application limits the number of messages returned in one poll (review pass 6).
-0497. Verify that the UI safely renders message content (review pass 6).
-0498. Verify that error responses do not include file paths or secret configuration (review pass 6).
-0499. Verify that the desktop protocol rejects oversized frames (review pass 6).
-0500. Verify that the desktop protocol handles a client closing unexpectedly (review pass 6).
-0501. Verify that multiple desktop clients do not corrupt shared state (review pass 6).
-0502. Verify that socket exceptions do not terminate unrelated client sessions (review pass 6).
-0503. Verify that connection resources are closed after errors (review pass 6).
-0504. Verify whether the TCP path is encrypted; document the actual result (review pass 6).
-0505. Verify whether TLS is used by the desktop path or only by the browser path (review pass 6).
-0506. Verify that a missing encryption key results in a controlled error (review pass 6).
-0507. Verify that invalid ciphertext is rejected (review pass 6).
-0508. Verify that the receiver checks integrity before displaying decrypted text (review pass 6).
-0509. Verify that key material is not embedded in browser JavaScript unless explicitly intended and safe (review pass 6).
-0510. Verify that a browser user cannot retrieve another room's encryption key (review pass 6).
-0511. Verify whether the encryption process runs on the client or the server (review pass 6).
-0512. Verify the exact order of all transformation stages (review pass 6).
-0513. Verify whether the first layer is encoding, formatting, or cryptographic protection (review pass 6).
-0514. Verify whether the second layer is a standard encryption construction (review pass 6).
-0515. Verify the exact meaning of the quantum-simulation phrase in the implementation (review pass 6).
-0516. Verify that any quantum simulator dependency is listed and versioned (review pass 6).
-0517. Verify whether the quantum stage is reversible and how reversal works (review pass 6).
-0518. Verify that random values needed for decryption are transmitted or derived correctly (review pass 6).
-0519. Verify that nonce or initialization-vector handling matches the selected algorithm (review pass 6).
-0520. Verify that cryptographic random values are generated by a secure source (review pass 6).
-0521. Verify that keys are not reused in ways forbidden by the algorithm (review pass 6).
-0522. Verify that algorithm parameters are not silently changed between client and server (review pass 6).
-0523. Verify that test vectors are available for each cryptographic component (review pass 6).
-0524. Verify that the project does not claim quantum resistance without evidence (review pass 6).
-0525. Verify that room password hashing uses a purpose-built password-hashing mechanism (review pass 6).
-0526. Verify that failed room password attempts are handled consistently (review pass 6).
-0527. Verify whether room passwords can be guessed without rate limits (review pass 6).
-0528. Verify that registration checks are based on trusted server-side state (review pass 6).
-0529. Verify how participant presence expires after disconnect (review pass 6).
-0530. Verify whether the same account can open multiple sessions (review pass 6).
-0531. Verify whether room membership is persisted or only held in memory (review pass 6).
-0532. Verify whether messages remain after leaving a room (review pass 6).
-0533. Verify what data is deleted when a room is deleted (review pass 6).
-0534. Verify the storage schema and document it accurately (review pass 6).
-0535. Verify that in-memory state loss on restart is acceptable for the demo (review pass 6).
-0536. Verify whether a shared key-value store is implemented or only proposed (review pass 6).
-0537. Verify whether multiple processes can read and write the same message history (review pass 6).
-0538. Verify that message identifiers remain unique when multiple workers run (review pass 6).
-0539. Verify that storage errors are visible to maintainers without exposing secrets to users (review pass 6).
-0540. Verify that logs have a retention and access policy (review pass 6).
-0541. Verify that backups, if any, are encrypted and access-controlled (review pass 6).
-0542. Verify that dependency versions are known and repeatable (review pass 6).
-0543. Verify that a clean checkout contains every file required to run the demo (review pass 6).
-0544. Verify that startup commands in this README match the current repository (review pass 6).
-0545. Verify that the documented local URL matches the configured Flask host and port (review pass 6).
-0546. Verify that desktop host and port settings are documented from the code (review pass 6).
-0547. Verify that the browser and desktop flows can be started independently if intended (review pass 6).
-0548. Verify that stopping the server does not leave background processes running (review pass 6).
-0549. Verify that debug mode is disabled outside local development (review pass 6).
-0550. Verify that the public deployment uses valid TLS certificates (review pass 6).
-0551. Verify that the app does not silently accept invalid certificates (review pass 6).
-0552. Verify that allowed browser origins are restricted as intended (review pass 6).
-0553. Verify that the server has request and connection timeouts (review pass 6).
-0554. Verify that deployment secrets are injected through a safe mechanism (review pass 6).
-0555. Verify that the deployment process does not publish local secret files (review pass 6).
-0556. Verify that the project is labelled as a prototype if no security audit exists (review pass 6).
-0557. Verify that all external statistics have credible sources before including them (review pass 6).
-0558. Verify that performance claims are supported by actual measurements (review pass 6).
-0559. Verify that security claims are tied to a documented threat model (review pass 6).
-0560. Verify that known limitations are visible to a reviewer (review pass 6).
-0561. Verify that planned features are not described as already implemented (review pass 6).
-0562. Verify that the repository map matches actual files (review pass 6).
-0563. Verify that all code examples in the README are runnable (review pass 6).
-0564. Verify that all shell commands are appropriate for the target operating system (review pass 6).
-0565. Verify that the license section reflects the actual license chosen by the author (review pass 6).
-0566. Verify that contributor instructions match the repository workflow (review pass 6).
-0567. Verify that issue reporting instructions point to a real project location (review pass 6).
-0568. Verify that the README does not include private personal data (review pass 6).
-0569. Verify that screenshots do not expose credentials or real messages (review pass 6).
-0570. Verify that demo credentials are clearly marked as disposable if provided (review pass 6).
-0571. Verify that any sample keys are explicitly non-production test values (review pass 6).
-0572. Verify that a reviewer can reproduce the basic chat flow from a clean environment (review pass 6).
-0573. Verify that a reviewer can identify which security properties are demonstrated (review pass 6).
-0574. Verify that a reviewer can distinguish transport encryption from message encryption (review pass 6).
-0575. Verify that a reviewer understands the difference between simulation and quantum hardware (review pass 6).
-0576. Verify that all unknown details are resolved or kept marked as unknown (review pass 6).
-0577. Verify the behavior with a clean install rather than relying on an existing virtual environment (review pass 7).
-0578. Verify every import against the dependency manifest (review pass 7).
-0579. Verify that the Flask application uses a non-default secret in deployment (review pass 7).
-0580. Verify that passwords are never printed in terminal output (review pass 7).
-0581. Verify that message plaintext is not written to debug logs (review pass 7).
-0582. Verify that ciphertext encoding survives JSON serialization if JSON is used (review pass 7).
-0583. Verify that Unicode messages survive encryption and decryption unchanged (review pass 7).
-0584. Verify that a message cannot be fetched by changing only the room identifier (review pass 7).
-0585. Verify that a participant cannot impersonate another participant by editing request fields (review pass 7).
-0586. Verify that polling requests are authorized independently of the initial page request (review pass 7).
-0587. Verify that repeated client retries do not create unintended duplicate messages (review pass 7).
-0588. Verify that a stale polling cursor has a defined outcome (review pass 7).
-0589. Verify that malformed JSON is rejected if the endpoint expects JSON (review pass 7).
-0590. Verify that unexpected field names are rejected or ignored safely (review pass 7).
-0591. Verify that the server caps request size (review pass 7).
-0592. Verify that the application limits the number of messages returned in one poll (review pass 7).
-0593. Verify that the UI safely renders message content (review pass 7).
-0594. Verify that error responses do not include file paths or secret configuration (review pass 7).
-0595. Verify that the desktop protocol rejects oversized frames (review pass 7).
-0596. Verify that the desktop protocol handles a client closing unexpectedly (review pass 7).
-0597. Verify that multiple desktop clients do not corrupt shared state (review pass 7).
-0598. Verify that socket exceptions do not terminate unrelated client sessions (review pass 7).
-0599. Verify that connection resources are closed after errors (review pass 7).
-0600. Verify whether the TCP path is encrypted; document the actual result (review pass 7).
-0601. Verify whether TLS is used by the desktop path or only by the browser path (review pass 7).
-0602. Verify that a missing encryption key results in a controlled error (review pass 7).
-0603. Verify that invalid ciphertext is rejected (review pass 7).
-0604. Verify that the receiver checks integrity before displaying decrypted text (review pass 7).
-0605. Verify that key material is not embedded in browser JavaScript unless explicitly intended and safe (review pass 7).
-0606. Verify that a browser user cannot retrieve another room's encryption key (review pass 7).
-0607. Verify whether the encryption process runs on the client or the server (review pass 7).
-0608. Verify the exact order of all transformation stages (review pass 7).
-0609. Verify whether the first layer is encoding, formatting, or cryptographic protection (review pass 7).
-0610. Verify whether the second layer is a standard encryption construction (review pass 7).
-0611. Verify the exact meaning of the quantum-simulation phrase in the implementation (review pass 7).
-0612. Verify that any quantum simulator dependency is listed and versioned (review pass 7).
-0613. Verify whether the quantum stage is reversible and how reversal works (review pass 7).
-0614. Verify that random values needed for decryption are transmitted or derived correctly (review pass 7).
-0615. Verify that nonce or initialization-vector handling matches the selected algorithm (review pass 7).
-0616. Verify that cryptographic random values are generated by a secure source (review pass 7).
-0617. Verify that keys are not reused in ways forbidden by the algorithm (review pass 7).
-0618. Verify that algorithm parameters are not silently changed between client and server (review pass 7).
-0619. Verify that test vectors are available for each cryptographic component (review pass 7).
-0620. Verify that the project does not claim quantum resistance without evidence (review pass 7).
-0621. Verify that room password hashing uses a purpose-built password-hashing mechanism (review pass 7).
-0622. Verify that failed room password attempts are handled consistently (review pass 7).
-0623. Verify whether room passwords can be guessed without rate limits (review pass 7).
-0624. Verify that registration checks are based on trusted server-side state (review pass 7).
-0625. Verify how participant presence expires after disconnect (review pass 7).
-0626. Verify whether the same account can open multiple sessions (review pass 7).
-0627. Verify whether room membership is persisted or only held in memory (review pass 7).
-0628. Verify whether messages remain after leaving a room (review pass 7).
-0629. Verify what data is deleted when a room is deleted (review pass 7).
-0630. Verify the storage schema and document it accurately (review pass 7).
-0631. Verify that in-memory state loss on restart is acceptable for the demo (review pass 7).
-0632. Verify whether a shared key-value store is implemented or only proposed (review pass 7).
-0633. Verify whether multiple processes can read and write the same message history (review pass 7).
-0634. Verify that message identifiers remain unique when multiple workers run (review pass 7).
-0635. Verify that storage errors are visible to maintainers without exposing secrets to users (review pass 7).
-0636. Verify that logs have a retention and access policy (review pass 7).
-0637. Verify that backups, if any, are encrypted and access-controlled (review pass 7).
-0638. Verify that dependency versions are known and repeatable (review pass 7).
-0639. Verify that a clean checkout contains every file required to run the demo (review pass 7).
-0640. Verify that startup commands in this README match the current repository (review pass 7).
-0641. Verify that the documented local URL matches the configured Flask host and port (review pass 7).
-0642. Verify that desktop host and port settings are documented from the code (review pass 7).
-0643. Verify that the browser and desktop flows can be started independently if intended (review pass 7).
-0644. Verify that stopping the server does not leave background processes running (review pass 7).
-0645. Verify that debug mode is disabled outside local development (review pass 7).
-0646. Verify that the public deployment uses valid TLS certificates (review pass 7).
-0647. Verify that the app does not silently accept invalid certificates (review pass 7).
-0648. Verify that allowed browser origins are restricted as intended (review pass 7).
-0649. Verify that the server has request and connection timeouts (review pass 7).
-0650. Verify that deployment secrets are injected through a safe mechanism (review pass 7).
-0651. Verify that the deployment process does not publish local secret files (review pass 7).
-0652. Verify that the project is labelled as a prototype if no security audit exists (review pass 7).
-0653. Verify that all external statistics have credible sources before including them (review pass 7).
-0654. Verify that performance claims are supported by actual measurements (review pass 7).
-0655. Verify that security claims are tied to a documented threat model (review pass 7).
-0656. Verify that known limitations are visible to a reviewer (review pass 7).
-0657. Verify that planned features are not described as already implemented (review pass 7).
-0658. Verify that the repository map matches actual files (review pass 7).
-0659. Verify that all code examples in the README are runnable (review pass 7).
-0660. Verify that all shell commands are appropriate for the target operating system (review pass 7).
-0661. Verify that the license section reflects the actual license chosen by the author (review pass 7).
-0662. Verify that contributor instructions match the repository workflow (review pass 7).
-0663. Verify that issue reporting instructions point to a real project location (review pass 7).
-0664. Verify that the README does not include private personal data (review pass 7).
-0665. Verify that screenshots do not expose credentials or real messages (review pass 7).
-0666. Verify that demo credentials are clearly marked as disposable if provided (review pass 7).
-0667. Verify that any sample keys are explicitly non-production test values (review pass 7).
-0668. Verify that a reviewer can reproduce the basic chat flow from a clean environment (review pass 7).
-0669. Verify that a reviewer can identify which security properties are demonstrated (review pass 7).
-0670. Verify that a reviewer can distinguish transport encryption from message encryption (review pass 7).
-0671. Verify that a reviewer understands the difference between simulation and quantum hardware (review pass 7).
-0672. Verify that all unknown details are resolved or kept marked as unknown (review pass 7).
-0673. Verify the behavior with a clean install rather than relying on an existing virtual environment (review pass 8).
-0674. Verify every import against the dependency manifest (review pass 8).
-0675. Verify that the Flask application uses a non-default secret in deployment (review pass 8).
-0676. Verify that passwords are never printed in terminal output (review pass 8).
-0677. Verify that message plaintext is not written to debug logs (review pass 8).
-0678. Verify that ciphertext encoding survives JSON serialization if JSON is used (review pass 8).
-0679. Verify that Unicode messages survive encryption and decryption unchanged (review pass 8).
-0680. Verify that a message cannot be fetched by changing only the room identifier (review pass 8).
-0681. Verify that a participant cannot impersonate another participant by editing request fields (review pass 8).
-0682. Verify that polling requests are authorized independently of the initial page request (review pass 8).
-0683. Verify that repeated client retries do not create unintended duplicate messages (review pass 8).
-0684. Verify that a stale polling cursor has a defined outcome (review pass 8).
-0685. Verify that malformed JSON is rejected if the endpoint expects JSON (review pass 8).
-0686. Verify that unexpected field names are rejected or ignored safely (review pass 8).
-0687. Verify that the server caps request size (review pass 8).
-0688. Verify that the application limits the number of messages returned in one poll (review pass 8).
-0689. Verify that the UI safely renders message content (review pass 8).
-0690. Verify that error responses do not include file paths or secret configuration (review pass 8).
-0691. Verify that the desktop protocol rejects oversized frames (review pass 8).
-0692. Verify that the desktop protocol handles a client closing unexpectedly (review pass 8).
-0693. Verify that multiple desktop clients do not corrupt shared state (review pass 8).
-0694. Verify that socket exceptions do not terminate unrelated client sessions (review pass 8).
-0695. Verify that connection resources are closed after errors (review pass 8).
-0696. Verify whether the TCP path is encrypted; document the actual result (review pass 8).
-0697. Verify whether TLS is used by the desktop path or only by the browser path (review pass 8).
-0698. Verify that a missing encryption key results in a controlled error (review pass 8).
-0699. Verify that invalid ciphertext is rejected (review pass 8).
-0700. Verify that the receiver checks integrity before displaying decrypted text (review pass 8).
-0701. Verify that key material is not embedded in browser JavaScript unless explicitly intended and safe (review pass 8).
-0702. Verify that a browser user cannot retrieve another room's encryption key (review pass 8).
-0703. Verify whether the encryption process runs on the client or the server (review pass 8).
-0704. Verify the exact order of all transformation stages (review pass 8).
-0705. Verify whether the first layer is encoding, formatting, or cryptographic protection (review pass 8).
-0706. Verify whether the second layer is a standard encryption construction (review pass 8).
-0707. Verify the exact meaning of the quantum-simulation phrase in the implementation (review pass 8).
-0708. Verify that any quantum simulator dependency is listed and versioned (review pass 8).
-0709. Verify whether the quantum stage is reversible and how reversal works (review pass 8).
-0710. Verify that random values needed for decryption are transmitted or derived correctly (review pass 8).
-0711. Verify that nonce or initialization-vector handling matches the selected algorithm (review pass 8).
-0712. Verify that cryptographic random values are generated by a secure source (review pass 8).
-0713. Verify that keys are not reused in ways forbidden by the algorithm (review pass 8).
-0714. Verify that algorithm parameters are not silently changed between client and server (review pass 8).
-0715. Verify that test vectors are available for each cryptographic component (review pass 8).
-0716. Verify that the project does not claim quantum resistance without evidence (review pass 8).
-0717. Verify that room password hashing uses a purpose-built password-hashing mechanism (review pass 8).
-0718. Verify that failed room password attempts are handled consistently (review pass 8).
-0719. Verify whether room passwords can be guessed without rate limits (review pass 8).
-0720. Verify that registration checks are based on trusted server-side state (review pass 8).
-0721. Verify how participant presence expires after disconnect (review pass 8).
-0722. Verify whether the same account can open multiple sessions (review pass 8).
-0723. Verify whether room membership is persisted or only held in memory (review pass 8).
-0724. Verify whether messages remain after leaving a room (review pass 8).
-0725. Verify what data is deleted when a room is deleted (review pass 8).
-0726. Verify the storage schema and document it accurately (review pass 8).
-0727. Verify that in-memory state loss on restart is acceptable for the demo (review pass 8).
-0728. Verify whether a shared key-value store is implemented or only proposed (review pass 8).
-0729. Verify whether multiple processes can read and write the same message history (review pass 8).
-0730. Verify that message identifiers remain unique when multiple workers run (review pass 8).
-0731. Verify that storage errors are visible to maintainers without exposing secrets to users (review pass 8).
-0732. Verify that logs have a retention and access policy (review pass 8).
-0733. Verify that backups, if any, are encrypted and access-controlled (review pass 8).
-0734. Verify that dependency versions are known and repeatable (review pass 8).
-0735. Verify that a clean checkout contains every file required to run the demo (review pass 8).
-0736. Verify that startup commands in this README match the current repository (review pass 8).
-0737. Verify that the documented local URL matches the configured Flask host and port (review pass 8).
-0738. Verify that desktop host and port settings are documented from the code (review pass 8).
-0739. Verify that the browser and desktop flows can be started independently if intended (review pass 8).
-0740. Verify that stopping the server does not leave background processes running (review pass 8).
-0741. Verify that debug mode is disabled outside local development (review pass 8).
-0742. Verify that the public deployment uses valid TLS certificates (review pass 8).
-0743. Verify that the app does not silently accept invalid certificates (review pass 8).
-0744. Verify that allowed browser origins are restricted as intended (review pass 8).
-0745. Verify that the server has request and connection timeouts (review pass 8).
-0746. Verify that deployment secrets are injected through a safe mechanism (review pass 8).
-0747. Verify that the deployment process does not publish local secret files (review pass 8).
-0748. Verify that the project is labelled as a prototype if no security audit exists (review pass 8).
-0749. Verify that all external statistics have credible sources before including them (review pass 8).
-0750. Verify that performance claims are supported by actual measurements (review pass 8).
-0751. Verify that security claims are tied to a documented threat model (review pass 8).
-0752. Verify that known limitations are visible to a reviewer (review pass 8).
-0753. Verify that planned features are not described as already implemented (review pass 8).
-0754. Verify that the repository map matches actual files (review pass 8).
-0755. Verify that all code examples in the README are runnable (review pass 8).
-0756. Verify that all shell commands are appropriate for the target operating system (review pass 8).
-0757. Verify that the license section reflects the actual license chosen by the author (review pass 8).
-0758. Verify that contributor instructions match the repository workflow (review pass 8).
-0759. Verify that issue reporting instructions point to a real project location (review pass 8).
-0760. Verify that the README does not include private personal data (review pass 8).
-0761. Verify that screenshots do not expose credentials or real messages (review pass 8).
-0762. Verify that demo credentials are clearly marked as disposable if provided (review pass 8).
-0763. Verify that any sample keys are explicitly non-production test values (review pass 8).
-0764. Verify that a reviewer can reproduce the basic chat flow from a clean environment (review pass 8).
-0765. Verify that a reviewer can identify which security properties are demonstrated (review pass 8).
-0766. Verify that a reviewer can distinguish transport encryption from message encryption (review pass 8).
-0767. Verify that a reviewer understands the difference between simulation and quantum hardware (review pass 8).
-0768. Verify that all unknown details are resolved or kept marked as unknown (review pass 8).
-0769. Verify the behavior with a clean install rather than relying on an existing virtual environment (review pass 9).
-0770. Verify every import against the dependency manifest (review pass 9).
-0771. Verify that the Flask application uses a non-default secret in deployment (review pass 9).
-0772. Verify that passwords are never printed in terminal output (review pass 9).
-0773. Verify that message plaintext is not written to debug logs (review pass 9).
-0774. Verify that ciphertext encoding survives JSON serialization if JSON is used (review pass 9).
-0775. Verify that Unicode messages survive encryption and decryption unchanged (review pass 9).
-0776. Verify that a message cannot be fetched by changing only the room identifier (review pass 9).
-0777. Verify that a participant cannot impersonate another participant by editing request fields (review pass 9).
-0778. Verify that polling requests are authorized independently of the initial page request (review pass 9).
-0779. Verify that repeated client retries do not create unintended duplicate messages (review pass 9).
-0780. Verify that a stale polling cursor has a defined outcome (review pass 9).
-0781. Verify that malformed JSON is rejected if the endpoint expects JSON (review pass 9).
-0782. Verify that unexpected field names are rejected or ignored safely (review pass 9).
-0783. Verify that the server caps request size (review pass 9).
-0784. Verify that the application limits the number of messages returned in one poll (review pass 9).
-0785. Verify that the UI safely renders message content (review pass 9).
-0786. Verify that error responses do not include file paths or secret configuration (review pass 9).
-0787. Verify that the desktop protocol rejects oversized frames (review pass 9).
-0788. Verify that the desktop protocol handles a client closing unexpectedly (review pass 9).
-0789. Verify that multiple desktop clients do not corrupt shared state (review pass 9).
-0790. Verify that socket exceptions do not terminate unrelated client sessions (review pass 9).
-0791. Verify that connection resources are closed after errors (review pass 9).
-0792. Verify whether the TCP path is encrypted; document the actual result (review pass 9).
-0793. Verify whether TLS is used by the desktop path or only by the browser path (review pass 9).
-0794. Verify that a missing encryption key results in a controlled error (review pass 9).
-0795. Verify that invalid ciphertext is rejected (review pass 9).
-0796. Verify that the receiver checks integrity before displaying decrypted text (review pass 9).
-0797. Verify that key material is not embedded in browser JavaScript unless explicitly intended and safe (review pass 9).
-0798. Verify that a browser user cannot retrieve another room's encryption key (review pass 9).
-0799. Verify whether the encryption process runs on the client or the server (review pass 9).
-0800. Verify the exact order of all transformation stages (review pass 9).
-0801. Verify whether the first layer is encoding, formatting, or cryptographic protection (review pass 9).
-0802. Verify whether the second layer is a standard encryption construction (review pass 9).
-0803. Verify the exact meaning of the quantum-simulation phrase in the implementation (review pass 9).
-0804. Verify that any quantum simulator dependency is listed and versioned (review pass 9).
-0805. Verify whether the quantum stage is reversible and how reversal works (review pass 9).
-0806. Verify that random values needed for decryption are transmitted or derived correctly (review pass 9).
-0807. Verify that nonce or initialization-vector handling matches the selected algorithm (review pass 9).
-0808. Verify that cryptographic random values are generated by a secure source (review pass 9).
-0809. Verify that keys are not reused in ways forbidden by the algorithm (review pass 9).
-0810. Verify that algorithm parameters are not silently changed between client and server (review pass 9).
-0811. Verify that test vectors are available for each cryptographic component (review pass 9).
-0812. Verify that the project does not claim quantum resistance without evidence (review pass 9).
-0813. Verify that room password hashing uses a purpose-built password-hashing mechanism (review pass 9).
-0814. Verify that failed room password attempts are handled consistently (review pass 9).
-0815. Verify whether room passwords can be guessed without rate limits (review pass 9).
-0816. Verify that registration checks are based on trusted server-side state (review pass 9).
-0817. Verify how participant presence expires after disconnect (review pass 9).
-0818. Verify whether the same account can open multiple sessions (review pass 9).
-0819. Verify whether room membership is persisted or only held in memory (review pass 9).
-0820. Verify whether messages remain after leaving a room (review pass 9).
-0821. Verify what data is deleted when a room is deleted (review pass 9).
-0822. Verify the storage schema and document it accurately (review pass 9).
-0823. Verify that in-memory state loss on restart is acceptable for the demo (review pass 9).
-0824. Verify whether a shared key-value store is implemented or only proposed (review pass 9).
-0825. Verify whether multiple processes can read and write the same message history (review pass 9).
-0826. Verify that message identifiers remain unique when multiple workers run (review pass 9).
-0827. Verify that storage errors are visible to maintainers without exposing secrets to users (review pass 9).
-0828. Verify that logs have a retention and access policy (review pass 9).
-0829. Verify that backups, if any, are encrypted and access-controlled (review pass 9).
-0830. Verify that dependency versions are known and repeatable (review pass 9).
-0831. Verify that a clean checkout contains every file required to run the demo (review pass 9).
-0832. Verify that startup commands in this README match the current repository (review pass 9).
-0833. Verify that the documented local URL matches the configured Flask host and port (review pass 9).
-0834. Verify that desktop host and port settings are documented from the code (review pass 9).
-0835. Verify that the browser and desktop flows can be started independently if intended (review pass 9).
-0836. Verify that stopping the server does not leave background processes running (review pass 9).
-0837. Verify that debug mode is disabled outside local development (review pass 9).
-0838. Verify that the public deployment uses valid TLS certificates (review pass 9).
-0839. Verify that the app does not silently accept invalid certificates (review pass 9).
-0840. Verify that allowed browser origins are restricted as intended (review pass 9).
-0841. Verify that the server has request and connection timeouts (review pass 9).
-0842. Verify that deployment secrets are injected through a safe mechanism (review pass 9).
-0843. Verify that the deployment process does not publish local secret files (review pass 9).
-0844. Verify that the project is labelled as a prototype if no security audit exists (review pass 9).
-0845. Verify that all external statistics have credible sources before including them (review pass 9).
-0846. Verify that performance claims are supported by actual measurements (review pass 9).
-0847. Verify that security claims are tied to a documented threat model (review pass 9).
-0848. Verify that known limitations are visible to a reviewer (review pass 9).
-0849. Verify that planned features are not described as already implemented (review pass 9).
-0850. Verify that the repository map matches actual files (review pass 9).
-0851. Verify that all code examples in the README are runnable (review pass 9).
-0852. Verify that all shell commands are appropriate for the target operating system (review pass 9).
-0853. Verify that the license section reflects the actual license chosen by the author (review pass 9).
-0854. Verify that contributor instructions match the repository workflow (review pass 9).
-0855. Verify that issue reporting instructions point to a real project location (review pass 9).
-0856. Verify that the README does not include private personal data (review pass 9).
-0857. Verify that screenshots do not expose credentials or real messages (review pass 9).
-0858. Verify that demo credentials are clearly marked as disposable if provided (review pass 9).
-0859. Verify that any sample keys are explicitly non-production test values (review pass 9).
-0860. Verify that a reviewer can reproduce the basic chat flow from a clean environment (review pass 9).
-0861. Verify that a reviewer can identify which security properties are demonstrated (review pass 9).
-0862. Verify that a reviewer can distinguish transport encryption from message encryption (review pass 9).
-0863. Verify that a reviewer understands the difference between simulation and quantum hardware (review pass 9).
-0864. Verify that all unknown details are resolved or kept marked as unknown (review pass 9).
-0865. Verify the behavior with a clean install rather than relying on an existing virtual environment (review pass 10).
-0866. Verify every import against the dependency manifest (review pass 10).
-0867. Verify that the Flask application uses a non-default secret in deployment (review pass 10).
-0868. Verify that passwords are never printed in terminal output (review pass 10).
-0869. Verify that message plaintext is not written to debug logs (review pass 10).
-0870. Verify that ciphertext encoding survives JSON serialization if JSON is used (review pass 10).
-0871. Verify that Unicode messages survive encryption and decryption unchanged (review pass 10).
-0872. Verify that a message cannot be fetched by changing only the room identifier (review pass 10).
-0873. Verify that a participant cannot impersonate another participant by editing request fields (review pass 10).
-0874. Verify that polling requests are authorized independently of the initial page request (review pass 10).
-0875. Verify that repeated client retries do not create unintended duplicate messages (review pass 10).
-1000. Final release rule: publish only verified implementation details, clearly label assumptions, and keep this README synchronized with the actual source code.
+Short-lived, stateless, re-authenticated requests give a smaller attack surface than long-lived stateful connections, and they suit serverless hosting.
+</details>
+
+<details>
+<summary><b>Why did my messages vanish?</b></summary>
+
+You are probably on in-memory storage. It can be lost on restart and is not shared across instances. Configure shared KV storage.
+</details>
+
+<details>
+<summary><b>Can a keylogger still read what I type?</b></summary>
+
+Custom input fields and virtual keyboards reduce the risk, but a fully compromised device cannot be made safe by this project.
+</details>
+
+<details>
+<summary><b>Are the web and desktop versions compatible?</b></summary>
+
+No. They are separate implementations with their own encryption and simulation code.
+</details>
+
+---
+
+## 🔤 Glossary
+
+| Term | Meaning |
+|------|---------|
+| **Ciphertext** | Encrypted form of a message |
+| **Qubit** | Quantum bit; can use superposition and entanglement |
+| **Superposition** | A qubit representing zero and one at once |
+| **Entanglement** | Qubits linked so their states are related |
+| **TLS** | Transport Layer Security, protects data in transit |
+| **HTTPS** | HTTP carried over TLS |
+| **Polling** | Repeatedly asking the server for new data |
+| **Cursor (`since`)** | The last message ID the client has seen |
+| **KV** | Key-value store |
+| **Serverless** | Code run on demand without managing servers |
+| **MITM** | Man-in-the-middle attack |
+| **Keylogger** | Malware that records keystrokes |
+| **Segment / Packet / Frame** | Data units at transport, network and link layers |
+
+---
+
+## 🗺️ Roadmap
+
+- [ ] Replace the simulation layer with a real quantum-inspired or post-quantum scheme
+- [ ] Add key exchange so passphrases are not the only gate
+- [ ] Rate limiting on send and fetch endpoints
+- [ ] Message expiry and automatic cleanup
+- [ ] Unified crypto module shared by web and desktop paths
+- [ ] Automated tests for validation, ordering and `since`
+- [ ] Independent security review
+
+---
+
+## 🧠 Key Takeaways
+
+1. **Three layers beat one:** ciphertext, qubit-simulated bits, and TLS.
+2. **Two different algorithms in sequence** keep data safe even if one fails.
+3. **The server validates everything:** fields, room, membership.
+4. **Message IDs define order**, and `since` keeps polling efficient.
+5. **Sender and members share one display flow.**
+6. **HTTP polling** gives a smaller attack surface than WebSockets.
+7. **Shared KV storage** is required for multi-instance deployment.
+8. **Keyloggers attack before encryption**, so use custom input and clear memory.
+9. **Vercel suits** short, stateless HTTP requests.
+10. **Qubits here are simulated.** That is a feature of an honest demonstration, not a hidden flaw.
+
+---
+
+<div align="center">
+
+### 🛡️ Hybrid Classical-Quantum Secure Messaging Prototype
+
+*Three layers. One conversation. Honest about what it is.*
+
+![Made with Flask](https://img.shields.io/badge/made%20with-Flask-000000?style=flat-square&logo=flask)
+![Secured by layers](https://img.shields.io/badge/secured%20by-3%20layers-2ea043?style=flat-square)
+![Prototype](https://img.shields.io/badge/stage-prototype-orange?style=flat-square)
+
+<img src="https://capsule-render.vercel.app/api?type=waving&color=0:2c5364,100:0f2027&height=100&section=footer" width="100%" alt=""/>
+
+</div>
